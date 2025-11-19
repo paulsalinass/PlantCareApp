@@ -436,7 +436,7 @@
             }
 
             await PlantService.AddPlantAsync(plant);
-            Navigation.NavigateTo("/plants");
+            Navigation.NavigateTo("/plants", true);
         }
         catch (Exception ex)
         {

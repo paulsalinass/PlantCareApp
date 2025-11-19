@@ -2,7 +2,7 @@
 @inject IJSRuntime JsRuntime
 
 <div class="app-shell @(isDarkMode ? "dark-mode" : null)">
-    <aside class="sidebar p-4 @(isMobileNavOpen ? "open" : null)">
+    <aside class="sidebar @(isMobileNavOpen ? "open" : null)">
         <div class="sidebar-header">
             <a href="/" class="brand">
                 <span class="brand-icon">
@@ -13,16 +13,13 @@
                     <small>IA para tus plantas</small>
                 </div>
             </a>
-            <button class="btn btn-toggle-mode" @onclick="ToggleMode">
+            <button class="btn btn-toggle-mode" type="button" @onclick="ToggleMode">
                 <i class="bi @(isDarkMode ? "bi-sun" : "bi-moon") me-1"></i>
                 @(isDarkMode ? "Claro" : "Oscuro")
             </button>
         </div>
-        <button class="btn btn-outline-secondary w-100 d-lg-none mb-3" type="button" @onclick="ToggleMobileNav">
-            <i class="bi @(isMobileNavOpen ? "bi-x-lg" : "bi-list") me-1"></i> Menú
-        </button>
 
-        <nav class="sidebar-nav @(isMobileNavOpen ? "show" : null)">
+        <nav class="sidebar-nav" @onclick="CloseMobileNav">
             <NavLink class="nav-link" href="/plants" Match="NavLinkMatch.Prefix">
                 <span class="nav-icon">
                     <i class="bi bi-grid-1x2"></i>
@@ -45,7 +42,7 @@
                 <span class="nav-icon">
                     <i class="bi bi-activity"></i>
                 </span>
-                Diagnóstico
+                Diagnostico
             </NavLink>
             <NavLink class="nav-link" href="/today">
                 <span class="nav-icon">
@@ -92,11 +89,51 @@
         </nav>
     </aside>
 
-    <main class="content">
-        <div class="content-inner">
-            @Body
-        </div>
-    </main>
+    <div class="mobile-nav-overlay @(isMobileNavOpen ? "show" : null)" @onclick="CloseMobileNav"></div>
+
+    <section class="main-area">
+        <header class="mobile-topbar">
+            <a href="/" class="brand topbar-brand">
+                <span class="brand-icon compact">
+                    <i class="bi bi-flower3"></i>
+                </span>
+                <div>
+                    <strong>PlantCare</strong>
+                    <small>IA para tus plantas</small>
+                </div>
+            </a>
+        </header>
+
+        <main class="content">
+            <div class="content-inner">
+                @Body
+            </div>
+        </main>
+    </section>
+    <nav class="mobile-bottom-nav">
+        <NavLink class="bottom-nav-link" href="/today" Match="NavLinkMatch.Prefix">
+            <i class="bi bi-calendar-check"></i>
+            <span>Hoy</span>
+        </NavLink>
+        <NavLink class="bottom-nav-link" href="/plants" Match="NavLinkMatch.Prefix">
+            <i class="bi bi-collection"></i>
+            <span>Plantas</span>
+        </NavLink>
+        <NavLink class="bottom-nav-link" href="/plants/add">
+            <span class="add-pill">
+                <i class="bi bi-plus-lg"></i>
+            </span>
+            <span class="sr-only">Agregar</span>
+        </NavLink>
+        <NavLink class="bottom-nav-link" href="/diagnosis">
+            <i class="bi bi-activity"></i>
+            <span>Diagnóstico</span>
+        </NavLink>
+        <NavLink class="bottom-nav-link" href="/more">
+            <i class="bi bi-grid"></i>
+            <span>Más</span>
+        </NavLink>
+    </nav>
 </div>
 
 @code {
@@ -121,5 +158,6 @@
     {
         isMobileNavOpen = !isMobileNavOpen;
     }
-}
 
+    private void CloseMobileNav() => isMobileNavOpen = false;
+}

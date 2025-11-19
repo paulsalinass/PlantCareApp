@@ -439,7 +439,7 @@ else
             }
 
             await PlantService.UpdatePlantAsync(plant);
-            Navigation.NavigateTo("/plants");
+            Navigation.NavigateTo("/plants", true);
         }
         catch (Exception ex)
         {

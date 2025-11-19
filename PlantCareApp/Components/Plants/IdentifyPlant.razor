@@ -1,6 +1,8 @@
 @page "/identify"
 @rendermode InteractiveServer
 
+@using Microsoft.AspNetCore.WebUtilities
+
 @inject PlantIdentificationService IdentificationService
 @inject ImageStorageService ImageStorage
 @inject NavigationManager Navigation
@@ -168,21 +170,21 @@
 
     private void NavigateToAdd(string? suggestedSpecies, string? photoPath)
     {
-        var queryParts = new List<string>();
+        var query = new Dictionary<string, string>();
+
         if (!string.IsNullOrWhiteSpace(suggestedSpecies))
         {
-            queryParts.Add($"species={Uri.EscapeDataString(suggestedSpecies)}");
-        }
-        if (!string.IsNullOrWhiteSpace(photoPath))
-        {
-            queryParts.Add($"photoPath={Uri.EscapeDataString(photoPath)}");
+            query["species"] = suggestedSpecies;
         }
 
-        var url = "/plants/add";
-        if (queryParts.Count > 0)
+        if (!string.IsNullOrWhiteSpace(photoPath))
         {
-            url += "?" + string.Join("&", queryParts);
+            query["photoPath"] = photoPath;
         }
+
+        var url = query.Count > 0
+            ? QueryHelpers.AddQueryString("/plants/add", query!)
+            : "/plants/add";
 
         Navigation.NavigateTo(url);
     }
