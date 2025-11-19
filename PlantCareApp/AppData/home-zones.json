@@ -1,0 +1,72 @@
+[
+  {
+    "id": "be879377-eb90-41a1-b4fe-4c84ab103ddb",
+    "name": "Sala",
+    "areaType": "Interior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.7491669Z"
+  },
+  {
+    "id": "6667baff-679f-4aa8-9acb-473f5ab61a55",
+    "name": "Comedor",
+    "areaType": "Interior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.7492594Z"
+  },
+  {
+    "id": "efb08cbb-b432-47a3-b2bd-94bfef546a81",
+    "name": "Cocina",
+    "areaType": "Interior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.7492602Z"
+  },
+  {
+    "id": "72a830cd-03aa-46fe-b674-f1ce6d38e0ca",
+    "name": "Dormitorio",
+    "areaType": "Interior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.7492607Z"
+  },
+  {
+    "id": "c71e853a-f208-4dee-ba5e-966185f4d1e1",
+    "name": "Estudio",
+    "areaType": "Interior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.749262Z"
+  },
+  {
+    "id": "2d06d579-168e-4983-979a-3cca92ec27c3",
+    "name": "Patio",
+    "areaType": "Exterior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.749263Z"
+  },
+  {
+    "id": "53287bc4-0a1f-4318-b436-28c644e83228",
+    "name": "Balc\u00F3n",
+    "areaType": "Exterior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.7492635Z"
+  },
+  {
+    "id": "579f8448-d397-4a98-a030-1309a14b0796",
+    "name": "Terraza",
+    "areaType": "Exterior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.749264Z"
+  },
+  {
+    "id": "4b60ddac-1011-4648-aa60-beb1a73e1b07",
+    "name": "Jard\u00EDn",
+    "areaType": "Exterior",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.749265Z"
+  },
+  {
+    "id": "01c0fe71-bd96-475d-8e6f-8e32bb040319",
+    "name": "Otro",
+    "areaType": "Mixto",
+    "notes": null,
+    "createdAt": "2025-11-18T21:10:27.7492692Z"
+  }
+]

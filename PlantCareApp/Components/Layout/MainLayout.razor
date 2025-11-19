@@ -1,0 +1,125 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JsRuntime
+
+<div class="app-shell @(isDarkMode ? "dark-mode" : null)">
+    <aside class="sidebar p-4 @(isMobileNavOpen ? "open" : null)">
+        <div class="sidebar-header">
+            <a href="/" class="brand">
+                <span class="brand-icon">
+                    <i class="bi bi-flower3"></i>
+                </span>
+                <div>
+                    <strong>PlantCare</strong>
+                    <small>IA para tus plantas</small>
+                </div>
+            </a>
+            <button class="btn btn-toggle-mode" @onclick="ToggleMode">
+                <i class="bi @(isDarkMode ? "bi-sun" : "bi-moon") me-1"></i>
+                @(isDarkMode ? "Claro" : "Oscuro")
+            </button>
+        </div>
+        <button class="btn btn-outline-secondary w-100 d-lg-none mb-3" type="button" @onclick="ToggleMobileNav">
+            <i class="bi @(isMobileNavOpen ? "bi-x-lg" : "bi-list") me-1"></i> Menú
+        </button>
+
+        <nav class="sidebar-nav @(isMobileNavOpen ? "show" : null)">
+            <NavLink class="nav-link" href="/plants" Match="NavLinkMatch.Prefix">
+                <span class="nav-icon">
+                    <i class="bi bi-grid-1x2"></i>
+                </span>
+                Mis plantas
+            </NavLink>
+            <NavLink class="nav-link" href="/plants/add">
+                <span class="nav-icon">
+                    <i class="bi bi-plus-circle"></i>
+                </span>
+                Agregar planta
+            </NavLink>
+            <NavLink class="nav-link" href="/identify">
+                <span class="nav-icon">
+                    <i class="bi bi-camera"></i>
+                </span>
+                Identificar por foto
+            </NavLink>
+            <NavLink class="nav-link" href="/diagnosis">
+                <span class="nav-icon">
+                    <i class="bi bi-activity"></i>
+                </span>
+                Diagnóstico
+            </NavLink>
+            <NavLink class="nav-link" href="/today">
+                <span class="nav-icon">
+                    <i class="bi bi-calendar-day"></i>
+                </span>
+                Hoy
+            </NavLink>
+            <NavLink class="nav-link" href="/dashboard">
+                <span class="nav-icon">
+                    <i class="bi bi-speedometer2"></i>
+                </span>
+                Dashboard
+            </NavLink>
+            <NavLink class="nav-link" href="/zones">
+                <span class="nav-icon">
+                    <i class="bi bi-house-heart"></i>
+                </span>
+                Mis ambientes
+            </NavLink>
+            <NavLink class="nav-link" href="/chat">
+                <span class="nav-icon">
+                    <i class="bi bi-chat-dots"></i>
+                </span>
+                Chat IA
+            </NavLink>
+            <NavLink class="nav-link" href="/weather">
+                <span class="nav-icon">
+                    <i class="bi bi-cloud-sun"></i>
+                </span>
+                Clima
+            </NavLink>
+            <NavLink class="nav-link" href="/notifications">
+                <span class="nav-icon">
+                    <i class="bi bi-bell"></i>
+                </span>
+                Notificaciones
+            </NavLink>
+            <NavLink class="nav-link" href="/profile">
+                <span class="nav-icon">
+                    <i class="bi bi-person"></i>
+                </span>
+                Perfil
+            </NavLink>
+        </nav>
+    </aside>
+
+    <main class="content">
+        <div class="content-inner">
+            @Body
+        </div>
+    </main>
+</div>
+
+@code {
+    private bool isDarkMode;
+    private bool isMobileNavOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isDarkMode = await JsRuntime.InvokeAsync<bool>("plantCare.applySavedTheme");
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleMode()
+    {
+        isDarkMode = await JsRuntime.InvokeAsync<bool>("plantCare.toggleTheme");
+    }
+
+    private void ToggleMobileNav()
+    {
+        isMobileNavOpen = !isMobileNavOpen;
+    }
+}
+

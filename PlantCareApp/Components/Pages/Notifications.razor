@@ -1,0 +1,154 @@
+@page "/notifications"
+@rendermode InteractiveServer
+
+@inject PlantService PlantService
+@inject UserSettingsService SettingsService
+
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Centro de notificaciones</h1>
+        <p class="text-muted mb-0">Configura cómo y cuándo deseas recibir recordatorios.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (isLoading)
+{
+    <p>Cargando preferencias...</p>
+}
+else
+{
+    <EditForm Model="settings!" OnValidSubmit="SaveAsync">
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <div class="history-card">
+                    <h5>Alertas por tipo</h5>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings!.Notifications.WateringAlerts" />
+                        <label class="form-check-label">Riegos</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings!.Notifications.FertilizingAlerts" />
+                        <label class="form-check-label">Fertilización</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings!.Notifications.PruningAlerts" />
+                        <label class="form-check-label">Poda / limpieza</label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="history-card">
+                    <h5>Canales</h5>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings!.Notifications.EmailChannel" />
+                        <label class="form-check-label">Email</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings!.Notifications.PushChannel" />
+                        <label class="form-check-label">Notificaciones push</label>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label">Horario silencioso</label>
+                        <InputText class="form-control" @bind-Value="settings!.Notifications.QuietHours" />
+                        <small class="text-muted">Ejemplo: 22:00 - 07:00</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-primary mt-3" type="submit" disabled="@isSaving">
+            @(isSaving ? "Guardando..." : "Guardar preferencias")
+        </button>
+    </EditForm>
+
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-body">
+            <h5 class="mb-3">Próximos recordatorios</h5>
+            @if (upcoming.Count == 0)
+            {
+                <p class="text-muted mb-0">No hay tareas programadas para los próximos días.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush">
+                    @foreach (var reminder in upcoming)
+                    {
+                        <li class="list-group-item d-flex justify-content-between">
+                            <div>
+                                <strong>@reminder.Plant.Name</strong>
+                                <p class="mb-0 small text-muted">@GetActionLabel(reminder.Type)</p>
+                            </div>
+                            <small class="text-muted">@reminder.DueDate.ToShortDateString()</small>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private UserSettings? settings;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? errorMessage;
+    private readonly List<PlantReminder> upcoming = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            isLoading = true;
+            settings = await SettingsService.GetAsync();
+            upcoming.Clear();
+            upcoming.AddRange((await PlantService.GetDueRemindersAsync(DateTime.Today.AddDays(5))).Take(5));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (settings is null || isSaving)
+        {
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+            await SettingsService.SaveAsync(settings);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private static string GetActionLabel(ReminderType type) => type switch
+    {
+        ReminderType.Watering => "Riego",
+        ReminderType.Fertilizing => "Fertilización",
+        ReminderType.Pruning => "Poda / limpieza",
+        ReminderType.Inspection => "Inspección",
+        _ => "Tarea"
+    };
+}

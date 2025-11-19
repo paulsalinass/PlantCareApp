@@ -1,0 +1,184 @@
+@page "/profile"
+@rendermode InteractiveServer
+
+@inject UserSettingsService SettingsService
+@inject HomeZoneService HomeZoneService
+
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Mi perfil</h1>
+        <p class="text-muted mb-0">Gestiona tu plan, preferencias y ambientes personalizados.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (isLoading || settings is null)
+{
+    <p>Cargando datos...</p>
+}
+else
+{
+    <EditForm Model="settings" OnValidSubmit="SaveAsync">
+        <div class="row g-4">
+            <div class="col-12 col-md-6">
+                <div class="history-card">
+                    <h5>Datos básicos</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre visible</label>
+                        <InputText class="form-control" @bind-Value="settings.DisplayName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Plan actual</label>
+                        <InputSelect class="form-select" @bind-Value="settings.PlanTier">
+                            <option value="Free">Free</option>
+                            <option value="Plus">Plus</option>
+                            <option value="Premium">Premium</option>
+                        </InputSelect>
+                    </div>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings.EnableAiInsights" />
+                        <label class="form-check-label">Activar recomendaciones IA</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <InputCheckbox class="form-check-input" @bind-Value="settings.EnableCommunity" />
+                        <label class="form-check-label">Mostrar sección comunidad (beta)</label>
+                    </div>
+                    <button class="btn btn-primary mt-3" type="submit" disabled="@isSaving">
+                        @(isSaving ? "Guardando..." : "Guardar cambios")
+                    </button>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="history-card">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">Ambientes personalizados</h5>
+                        <button class="btn btn-sm btn-outline-success" type="button" @onclick="SaveZoneAsync" disabled="@string.IsNullOrWhiteSpace(newZoneName)">
+                            Agregar
+                        </button>
+                    </div>
+                    <div class="input-group input-group-sm mb-3">
+                        <input class="form-control" placeholder="Ej. Estudio, Balcón sur..." @bind="newZoneName" />
+                        <select class="form-select" style="max-width:150px" @bind="newZoneType">
+                            <option>Interior</option>
+                            <option>Exterior</option>
+                            <option>Mixto</option>
+                        </select>
+                    </div>
+                    <div class="zone-list d-flex flex-wrap gap-2">
+                        @foreach (var zone in existingZones)
+                        {
+                            <span class="zone-chip">
+                                @zone.Name
+                                @if (!DefaultZones.Contains(zone.Name))
+                                {
+                                    <button type="button" class="btn-close btn-close-white ms-1" aria-label="Quitar" @onclick="() => DeleteZoneAsync(zone.Id)"></button>
+                                }
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private UserSettings? settings;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? errorMessage;
+    private readonly List<HomeZone> existingZones = new();
+    private string? newZoneName;
+    private string newZoneType = "Interior";
+    private static readonly HashSet<string> DefaultZones = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Sala", "Comedor", "Cocina", "Dormitorio", "Estudio", "Patio", "Balcón", "Terraza", "Jardín", "Otro"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            settings = await SettingsService.GetAsync();
+            existingZones.Clear();
+            existingZones.AddRange(await HomeZoneService.GetZonesAsync());
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (settings is null || isSaving)
+        {
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+            await SettingsService.SaveAsync(settings);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task SaveZoneAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newZoneName))
+        {
+            return;
+        }
+
+        try
+        {
+            var zone = new HomeZone
+            {
+                Name = newZoneName.Trim(),
+                AreaType = newZoneType
+            };
+            await HomeZoneService.AddZoneAsync(zone);
+            existingZones.Clear();
+            existingZones.AddRange(await HomeZoneService.GetZonesAsync());
+            newZoneName = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteZoneAsync(Guid zoneId)
+    {
+        try
+        {
+            await HomeZoneService.DeleteZoneAsync(zoneId);
+            existingZones.Clear();
+            existingZones.AddRange(await HomeZoneService.GetZonesAsync());
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

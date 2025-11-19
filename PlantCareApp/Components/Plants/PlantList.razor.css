@@ -1,0 +1,69 @@
+.plant-card {
+    border: none;
+    border-radius: 28px;
+    box-shadow: 0 25px 45px rgba(15, 23, 34, 0.08);
+    overflow: hidden;
+}
+
+.plant-card .card-img-top {
+    border-bottom: 1px solid rgba(15, 23, 34, 0.08);
+}
+
+.plant-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.meta-chip {
+    border-radius: 999px;
+    background-color: #f1f5f9;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-weight: 600;
+}
+
+.plant-status-row {
+    border-radius: 20px;
+    background: #f8fafc;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.status-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: rgba(16, 185, 129, 0.15);
+    color: #0f766e;
+    display: grid;
+    place-items: center;
+    font-size: 1.3rem;
+}
+
+.status-copy strong {
+    font-size: 1rem;
+    color: #0f172a;
+}
+
+@media (max-width: 768px) {
+    .plant-card {
+        border-radius: 20px;
+    }
+
+    .plant-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .plant-status-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

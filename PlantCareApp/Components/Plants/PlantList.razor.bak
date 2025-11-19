@@ -1,0 +1,330 @@
+@page "/plants"
+@rendermode InteractiveServer
+
+@inject PlantService PlantService
+@inject HomeZoneService HomeZoneService
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
+    <div>
+        <h1 class="mb-1">Mis plantas</h1>
+        <p class="text-muted mb-0">Gestiona tus plantas, fotos y recordatorios.</p>
+    </div>
+    <NavLink class="btn btn-success btn-lg" href="/plants/add">
+        <i class="bi bi-plus-circle me-2"></i> Agregar planta
+    </NavLink>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (isLoading)
+{
+    <p>Cargando...</p>
+}
+else if (plants.Count == 0)
+{
+    <div class="alert alert-info">Aún no tienes plantas registradas.</div>
+}
+else
+{
+    <div class="filter-panel">
+        <div class="filter-select">
+            <label class="form-label">Filtrar por ambiente</label>
+            <div class="filter-select-control">
+                <i class="bi bi-pin-map"></i>
+                <InputSelect class="form-select" @bind-Value="selectedZone">
+                    <option value="">Todos los ambientes</option>
+                    @foreach (var option in zoneSummaries)
+                    {
+                        <option value="@option.Name">@GetZoneOptionLabel(option)</option>
+                    }
+                </InputSelect>
+            </div>
+        </div>
+        <div class="zone-pill-group">
+            @foreach (var summary in zoneSummaries)
+            {
+                var isActive = IsZoneSelected(summary.Name);
+                <button type="button"
+                        class="zone-pill @(isActive ? "active" : null)"
+                        @onclick="@(() => ToggleZoneFilter(summary.Name))">
+                    <span>@summary.Name</span>
+                    <span class="pill-count">@summary.Count</span>
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!GetFilteredGroups().Any())
+    {
+        <div class="alert alert-info">
+            No hay plantas en el ambiente seleccionado.
+            <button class="btn btn-link btn-sm" type="button" @onclick="ResetFilter">Mostrar todas</button>
+        </div>
+    }
+    else
+    {
+        @foreach (var group in GetFilteredGroups())
+        {
+            <section class="zone-section">
+                <div class="zone-section-header">
+                    <div>
+                        <h4>@group.Key</h4>
+                        <p class="text-muted mb-0">@GetZoneSubtitle(group.Key, group.Count())</p>
+                    </div>
+                    <span class="zone-count-badge">
+                        @group.Count() @(group.Count() == 1 ? "planta" : "plantas")
+                    </span>
+                </div>
+
+                <div class="plant-card-grid">
+                    @foreach (var plant in group)
+                    {
+                        var watering = GetWateringStatus(plant);
+                        <article class="plant-dashboard-card">
+                            <div class="plant-photo">
+                                <img src="@GetPhotoUrl(plant)"
+                                     alt="@plant.Name" />
+                                <span class="habit-chip @(plant.IsIndoors ? "indoor" : "outdoor")">
+                                    <i class="bi @(plant.IsIndoors ? "bi-lamp" : "bi-brightness-high") me-1"></i>
+                                    @(plant.IsIndoors ? "Interior" : "Exterior")
+                                </span>
+                            </div>
+                            <div class="plant-card-body">
+                                <div class="plant-heading">
+                                    <div>
+                                        <p class="plant-zone-label">@group.Key</p>
+                                        <h5>@plant.Name</h5>
+                                        <p class="plant-species">@GetSpeciesLabel(plant)</p>
+                                    </div>
+                                    <span class="zone-chip">@GetLocationLabel(plant)</span>
+                                </div>
+
+                                <div class="plant-meta-chips">
+                                    <span class="meta-chip">
+                                        <i class="bi bi-tag"></i>
+                                        @GetSpeciesTag(plant)
+                                    </span>
+                                    <span class="meta-chip">
+                                        <i class="bi bi-house-heart"></i>
+                                        @group.Key
+                                    </span>
+                                    @if (!string.Equals(GetLocationLabel(plant), "Sin ciudad", System.StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class="meta-chip">
+                                            <i class="bi bi-geo-alt"></i>
+                                            @GetLocationLabel(plant)
+                                        </span>
+                                    }
+                                </div>
+
+                                <div class="plant-status-card">
+                                    <div class="status-icon">
+                                        <i class="@watering.IconClass"></i>
+                                    </div>
+                                    <div class="status-copy">
+                                        <p>@watering.Title</p>
+                                        <strong>@watering.Subtitle</strong>
+                                    </div>
+                                    <span class="status-pill @watering.PillClass">@watering.PillText</span>
+                                </div>
+
+                                <div class="plant-actions">
+                                    <NavLink class="btn btn-ghost" href="@GetDetailsUrl(plant.Id)">
+                                        <i class="bi bi-eye me-1"></i> Ver
+                                    </NavLink>
+                                    <NavLink class="btn btn-ghost" href="@GetEditUrl(plant.Id)">
+                                        <i class="bi bi-pencil-square me-1"></i> Editar
+                                    </NavLink>
+                                    <NavLink class="btn btn-danger-soft" href="@GetDeleteUrl(plant.Id)">
+                                        <i class="bi bi-trash me-1"></i> Eliminar
+                                    </NavLink>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    }
+}
+
+@code {
+    private readonly List<Plant> plants = new();
+    private readonly List<HomeZone> homeZones = new();
+    private readonly List<ZoneSummary> zoneSummaries = new();
+    private readonly Dictionary<string, int> zoneOrder = new(StringComparer.OrdinalIgnoreCase);
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? selectedZone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var plantsTask = PlantService.GetPlantsAsync();
+            var zonesTask = HomeZoneService.GetZonesAsync();
+            await Task.WhenAll(plantsTask, zonesTask);
+
+            plants.Clear();
+            plants.AddRange(plantsTask.Result);
+
+            homeZones.Clear();
+            homeZones.AddRange(zonesTask.Result);
+
+            BuildZoneOrder();
+            RecalculateZoneStats();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<IGrouping<string, Plant>> GetFilteredGroups()
+    {
+        var query = plants.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(selectedZone))
+        {
+            query = query.Where(p => string.Equals(NormalizeZone(p.LocationArea), selectedZone, System.StringComparison.OrdinalIgnoreCase));
+        }
+
+        return query
+            .GroupBy(p => NormalizeZone(p.LocationArea), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => GetZoneOrder(g.Key))
+            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void ToggleZoneFilter(string zoneName)
+    {
+        if (string.Equals(selectedZone, zoneName, System.StringComparison.OrdinalIgnoreCase))
+        {
+            selectedZone = string.Empty;
+        }
+        else
+        {
+            selectedZone = zoneName;
+        }
+    }
+
+    private void ResetFilter() => selectedZone = string.Empty;
+
+    private bool IsZoneSelected(string zoneName) =>
+        !string.IsNullOrWhiteSpace(selectedZone) &&
+        string.Equals(selectedZone, zoneName, System.StringComparison.OrdinalIgnoreCase);
+
+    private void BuildZoneOrder()
+    {
+        zoneOrder.Clear();
+        var index = 0;
+        foreach (var zone in homeZones.OrderBy(z => z.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            zoneOrder[zone.Name] = index++;
+        }
+
+        if (!zoneOrder.ContainsKey(UnassignedZoneLabel))
+        {
+            zoneOrder[UnassignedZoneLabel] = int.MaxValue - 1;
+        }
+    }
+
+    private void RecalculateZoneStats()
+    {
+        zoneSummaries.Clear();
+        var stats = plants
+            .GroupBy(p => NormalizeZone(p.LocationArea), StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ZoneSummary(g.Key, g.Count(), FindHomeZone(g.Key)?.AreaType))
+            .OrderByDescending(s => s.Count)
+            .ThenBy(s => GetZoneOrder(s.Name))
+            .ToList();
+
+        zoneSummaries.AddRange(stats);
+    }
+
+    private HomeZone? FindHomeZone(string zoneName) =>
+        homeZones.FirstOrDefault(z => string.Equals(z.Name, zoneName, System.StringComparison.OrdinalIgnoreCase));
+
+    private static string NormalizeZone(string? zone) =>
+        string.IsNullOrWhiteSpace(zone) ? UnassignedZoneLabel : zone.Trim();
+
+    private int GetZoneOrder(string zoneName) =>
+        zoneOrder.TryGetValue(zoneName, out var order) ? order : int.MaxValue;
+
+    private string GetZoneSubtitle(string zoneName, int count)
+    {
+        if (zoneName == UnassignedZoneLabel)
+        {
+            return $"Pendiente de asignar · {count} {(count == 1 ? "planta" : "plantas")}";
+        }
+
+        var zone = FindHomeZone(zoneName);
+        var label = !string.IsNullOrWhiteSpace(zone?.AreaType) ? zone.AreaType : "Sin tipo";
+        return $"{label} · {count} {(count == 1 ? "planta" : "plantas")}";
+    }
+
+    private string GetZoneOptionLabel(ZoneSummary summary)
+    {
+        if (summary.Name == UnassignedZoneLabel)
+        {
+            return "Sin ambiente (pendiente)";
+        }
+
+        return string.IsNullOrWhiteSpace(summary.AreaType)
+            ? summary.Name
+            : $"{summary.Name} · {summary.AreaType}";
+    }
+
+    private static WateringStatus GetWateringStatus(Plant plant)
+    {
+        var next = plant.NextWateringDate;
+        if (next is null)
+        {
+            return new WateringStatus("Riego pendiente", "Define una frecuencia", "Sin registro", "pill-neutral", "bi-calendar-plus");
+        }
+
+        var diff = (next.Value.Date - DateTime.Today).Days;
+        return diff switch
+        {
+            < 0 => new WateringStatus("Riego atrasado", $"Hace {Math.Abs(diff)} día(s)", "Atrasado", "pill-danger", "bi-exclamation-triangle"),
+            0 => new WateringStatus("Riego para hoy", "Riega durante el día", "Hoy", "pill-warning", "bi-droplet-half"),
+            <= 2 => new WateringStatus("Próximo riego", $"En {diff} día(s)", "Pronto", "pill-info", "bi-calendar-event"),
+            _ => new WateringStatus("Próximo riego", $"En {diff} día(s)", "Programado", "pill-success", "bi-check2-circle")
+        };
+    }
+
+    private static string GetSpeciesLabel(Plant plant) =>
+        string.IsNullOrWhiteSpace(plant.Species) ? "Sin especie definida" : plant.Species;
+
+    private static string GetSpeciesTag(Plant plant) =>
+        string.IsNullOrWhiteSpace(plant.Species) ? "General" : plant.Species;
+
+    private static string GetLocationLabel(Plant plant) =>
+        string.IsNullOrWhiteSpace(plant.LocationName) ? "Sin ciudad" : plant.LocationName;
+
+    private static string GetPhotoUrl(Plant plant)
+    {
+        if (!string.IsNullOrEmpty(plant.MainPhotoPath))
+        {
+            return plant.MainPhotoPath.StartsWith("/", System.StringComparison.Ordinal)
+                ? plant.MainPhotoPath
+                : "/" + plant.MainPhotoPath;
+        }
+
+        return "/images/placeholder.svg";
+    }
+
+    private static string GetEditUrl(int id) => $"/plants/edit/{id}";
+    private static string GetDetailsUrl(int id) => $"/plants/{id}";
+
+    private static string GetDeleteUrl(int id) => $"/plants/delete/{id}";
+
+    private const string UnassignedZoneLabel = "Sin ambiente";
+
+    private sealed record ZoneSummary(string Name, int Count, string? AreaType);
+    private sealed record WateringStatus(string Title, string Subtitle, string PillText, string PillClass, string IconClass);
+}

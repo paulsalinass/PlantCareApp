@@ -1,0 +1,44 @@
+@page "/plants/delete/{Id:int}"
+@rendermode InteractiveServer
+
+@inject PlantService PlantService
+@inject ImageStorageService ImageStorageService
+@inject NavigationManager Navigation
+
+<h3>Eliminando planta...</h3>
+
+@if (!string.IsNullOrEmpty(status))
+{
+    <p>@status</p>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private string? status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var plant = await PlantService.GetPlantAsync(Id);
+            if (plant is null)
+            {
+                status = "No encontramos la planta.";
+            }
+            else
+            {
+                status = $"Eliminando \"{plant.Name}\"...";
+                ImageStorageService.DeleteImage(plant.MainPhotoPath);
+                await PlantService.DeletePlantAsync(Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            status = $"Error: {ex.Message}";
+        }
+
+        await Task.Delay(600);
+        Navigation.NavigateTo("/plants");
+    }
+}

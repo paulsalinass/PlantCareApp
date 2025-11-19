@@ -1,0 +1,283 @@
+﻿@page "/today"
+@rendermode InteractiveServer
+
+@inject PlantService PlantService
+@inject PlantTimelineService TimelineService
+@inject CareAutomationService AutomationService
+
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Agenda de hoy</h1>
+        <p class="text-muted mb-0">Gestiona el riego, abonado y otros cuidados pendientes.</p>
+    </div>
+    <NavLink class="btn btn-primary" href="/plants">
+        Ver todas las plantas
+    </NavLink>
+</div>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert alert-info">@statusMessage</div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (isLoading)
+{
+    <p>Cargando tareas...</p>
+}
+else if (reminders.Count == 0)
+{
+    <div class="alert alert-success">
+        No tienes tareas pendientes. ??
+    </div>
+}
+else
+{
+    <div class="row g-3 today-summary">
+        @foreach (var card in summaryCards)
+        {
+            <div class="col-12 col-md-4">
+                <div class="today-summary-card @card.CssClass">
+                    <div class="summary-icon">
+                        <i class="@card.Icon"></i>
+                    </div>
+                    <div>
+                        <p class="summary-label mb-1">@card.Title</p>
+                        <h3 class="summary-title mb-0">@card.Count</h3>
+                        <small class="text-muted">@card.Subtitle</small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @foreach (var group in groupedReminders)
+    {
+        <section class="today-section">
+            <div class="today-section-header">
+                <div>
+                    <span class="section-pill">@GetTypeLabel(group.Key)</span>
+                    <p class="text-muted small mb-0">@group.Count() tarea(s) pendientes</p>
+                </div>
+                <span class="section-icon"><i class="@GetTypeIcon(group.Key)"></i></span>
+            </div>
+
+            <div class="row g-3">
+                @foreach (var reminder in group)
+                {
+                    <div class="col-12 col-lg-6">
+                        <div class="today-task-card">
+                            <div class="task-main">
+                                <div>
+                                    <p class="fw-semibold mb-0">@reminder.Plant.Name</p>
+                                    <small class="text-muted">@reminder.Plant.Species</small>
+                                </div>
+                                <span class="task-chip @GetDueClass(reminder)">@GetDueLabel(reminder)</span>
+                            </div>
+
+                            <div class="task-meta">
+                                <div>
+                                    <small class="text-muted">Ubicación</small>
+                                    <p class="mb-0 fw-medium">@DisplayLocation(reminder)</p>
+                                </div>
+                                <div>
+                                    <small class="text-muted">Tipo</small>
+                                    <p class="mb-0">@GetActionLabel(reminder.Type)</p>
+                                </div>
+                            </div>
+
+                            @if (automationInsights.TryGetValue(reminder.PlantId, out var auto))
+                            {
+                                <div class="timeline-snippet">
+                                    <div>
+                                        <small class="text-muted">Sugerencia</small>
+                                        <p class="mb-0 fw-semibold">@auto.Title</p>
+                                        <small class="text-muted">@auto.Description</small>
+                                    </div>
+                                    @if (latestEvents.TryGetValue(reminder.PlantId, out var latest))
+                                    {
+                                        <small class="text-muted">@latest.CreatedAt.ToLocalTime().ToString("dd MMM")</small>
+                                    }
+                                </div>
+                            }
+
+                            <div class="d-flex gap-2">
+                                <button type="button"
+                                        class="btn btn-primary flex-fill"
+                                        disabled="@(workingReminderId == reminder.Id)"
+                                        @onclick="() => CompleteReminder(reminder.Id)">
+                                    @((workingReminderId == reminder.Id) ? "Guardando..." : "Listo")
+                                </button>
+                                <NavLink class="btn btn-outline-secondary btn-ghost" href="@($"/plants/edit/{reminder.PlantId}")">
+                                    Editar
+                                </NavLink>
+                                <NavLink class="btn btn-outline-secondary btn-ghost" href="@($"/plants/{reminder.PlantId}?tab=history")">
+                                    Historial
+                                </NavLink>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private readonly List<PlantReminder> reminders = new();
+    private readonly List<SummaryCard> summaryCards = new();
+    private readonly Dictionary<int, PlantTimelineEvent> latestEvents = new();
+    private readonly Dictionary<int, CareAutomationInsight> automationInsights = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? statusMessage;
+    private int? workingReminderId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRemindersAsync();
+    }
+
+    private async Task LoadRemindersAsync()
+    {
+        try
+        {
+            isLoading = true;
+            reminders.Clear();
+            reminders.AddRange(await PlantService.GetDueRemindersAsync(DateTime.Today));
+            latestEvents.Clear();
+            automationInsights.Clear();
+            if (reminders.Count > 0)
+            {
+                var map = await TimelineService.GetLatestEventsAsync(reminders.Select(r => r.PlantId));
+                foreach (var entry in map)
+                {
+                    latestEvents[entry.Key] = entry.Value;
+                }
+
+                foreach (var reminder in reminders)
+                {
+                    var plant = reminder.Plant;
+                    var events = latestEvents.TryGetValue(plant.Id, out var evt) ? new[] { evt } : Array.Empty<PlantTimelineEvent>();
+                    var insight = await AutomationService.BuildInsightsAsync(plant, null, events);
+                    if (insight.Count > 0)
+                    {
+                        automationInsights[plant.Id] = insight.First();
+                    }
+                }
+            }
+            BuildSummary();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CompleteReminder(int reminderId)
+    {
+        if (workingReminderId.HasValue)
+        {
+            return;
+        }
+
+        workingReminderId = reminderId;
+        statusMessage = null;
+
+        try
+        {
+            await PlantService.CompleteReminderAsync(reminderId);
+            statusMessage = "Tarea completada.";
+            await LoadRemindersAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            workingReminderId = null;
+        }
+    }
+
+    private void BuildSummary()
+    {
+        summaryCards.Clear();
+        summaryCards.Add(CreateSummary(ReminderType.Watering, "Riegos pendientes", "bi bi-droplet", "watering"));
+        summaryCards.Add(CreateSummary(ReminderType.Fertilizing, "Fertilizaciones programadas", "bi bi-bag-heart", "fertilizing"));
+        summaryCards.Add(CreateSummary(ReminderType.Pruning, "Podas o inspección", "bi bi-flower3", "care"));
+    }
+
+    private SummaryCard CreateSummary(ReminderType type, string subtitle, string icon, string css)
+    {
+        var count = reminders.Count(r => r.Type == type);
+        return new SummaryCard(GetActionLabel(type), subtitle, icon, css, count);
+    }
+
+    private IEnumerable<IGrouping<ReminderType, PlantReminder>> groupedReminders =>
+        reminders
+            .GroupBy(r => r.Type)
+            .OrderBy(g => g.Key);
+
+    private static string GetActionLabel(ReminderType type) => type switch
+    {
+        ReminderType.Watering => "Riego",
+        ReminderType.Fertilizing => "Fertilización",
+        ReminderType.Pruning => "Poda",
+        ReminderType.Inspection => "Inspección",
+        _ => "Tarea"
+    };
+
+    private static string GetTypeLabel(ReminderType type) => type switch
+    {
+        ReminderType.Watering => "Riego",
+        ReminderType.Fertilizing => "Fertilización",
+        ReminderType.Pruning => "Poda / limpieza",
+        ReminderType.Inspection => "Inspección sanitaria",
+        _ => "Tareas"
+    };
+
+    private static string GetTypeIcon(ReminderType type) => type switch
+    {
+        ReminderType.Watering => "bi bi-droplet",
+        ReminderType.Fertilizing => "bi bi-bag",
+        ReminderType.Pruning => "bi bi-scissors",
+        ReminderType.Inspection => "bi bi-search",
+        _ => "bi bi-check2"
+    };
+
+    private static string DisplayLocation(PlantReminder reminder)
+    {
+        if (!string.IsNullOrWhiteSpace(reminder.Plant.LocationName))
+        {
+            return reminder.Plant.LocationName;
+        }
+        return reminder.Plant.IsIndoors ? "Interior" : "Exterior";
+    }
+
+    private static string GetDueLabel(PlantReminder reminder)
+    {
+        var diff = (reminder.DueDate.Date - DateTime.Today).Days;
+        if (diff < 0) return $"Atrasado {Math.Abs(diff)}d";
+        if (diff == 0) return "Hoy";
+        return $"En {diff}d";
+    }
+
+    private static string GetDueClass(PlantReminder reminder)
+    {
+        var diff = (reminder.DueDate.Date - DateTime.Today).Days;
+        if (diff < 0) return "overdue";
+        if (diff == 0) return "today";
+        return "upcoming";
+    }
+
+    private record SummaryCard(string Title, string Subtitle, string Icon, string CssClass, int Count);
+}
+

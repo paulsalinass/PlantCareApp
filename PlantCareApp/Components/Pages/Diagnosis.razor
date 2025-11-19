@@ -1,0 +1,183 @@
+@page "/diagnosis"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Components.Forms
+@inject PlantIdentificationService IdentificationService
+@inject PhotoAnalysisService PhotoAnalysisService
+
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Diagnóstico inteligente</h1>
+        <p class="text-muted mb-0">Sube una foto y te diremos qué especie podría ser y su estado actual.</p>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-12 col-md-5">
+                <div class="diagnosis-upload">
+                    @if (!string.IsNullOrEmpty(previewImage))
+                    {
+                        <img src="@previewImage" class="img-fluid rounded" alt="Previsualización" />
+                    }
+                    else
+                    {
+                        <div class="placeholder">
+                            <i class="bi bi-image"></i>
+                            <p>Arrastra o selecciona una foto</p>
+                        </div>
+                    }
+                    <InputFile OnChange="HandleFileAsync" accept="image/*" />
+                </div>
+                <small class="text-muted d-block mt-2">Formatos admitidos: JPG/PNG/WEBP (máx. 4 MB).</small>
+                @if (!string.IsNullOrEmpty(uploadError))
+                {
+                    <div class="alert alert-warning mt-2">@uploadError</div>
+                }
+            </div>
+            <div class="col-12 col-md-7">
+                <EditForm Model="diagnosisForm" OnValidSubmit="RunDiagnosisAsync">
+                    <div class="mb-3">
+                        <label class="form-label">Síntomas observados</label>
+                        <InputTextArea class="form-control" rows="3" @bind-Value="diagnosisForm.SymptomNotes" placeholder="Ej. hojas amarillas, manchas blancas..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contexto</label>
+                        <select class="form-select" @bind="diagnosisForm.EnvironmentContext">
+                            <option value="Interior">Interior</option>
+                            <option value="Exterior">Exterior</option>
+                            <option value="Mixto">Mixto / indeciso</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" type="submit" disabled="@isAnalyzing || uploadedBytes is null">
+                        @(isAnalyzing ? "Analizando..." : "Analizar foto")
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(diagnosisError))
+{
+    <div class="alert alert-danger">@diagnosisError</div>
+}
+
+@if (analysisResult is not null)
+{
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h5 class="mb-2">Estado de la planta</h5>
+            <p class="mb-1">@analysisResult.AnalysisSummary</p>
+            <small class="text-muted">Salud estimada: @(analysisResult.HealthScore?.ToString("P0") ?? "N/A")</small>
+        </div>
+    </div>
+}
+
+@if (identificationResults.Count > 0)
+{
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <h5 class="mb-3">Posibles especies</h5>
+            <div class="row g-3">
+                @foreach (var candidate in identificationResults)
+                {
+                    <div class="col-12 col-md-4">
+                        <div class="diagnosis-card h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong>@candidate.CommonName</strong>
+                                <span class="badge bg-light text-dark">@candidate.Confidence:P0</span>
+                            </div>
+                            <p class="text-muted mb-2"><em>@candidate.ScientificName</em></p>
+                            <p class="mb-0">@candidate.Summary</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string? previewImage;
+    private byte[]? uploadedBytes;
+    private string? uploadError;
+    private string? diagnosisError;
+    private bool isAnalyzing;
+    private readonly DiagnosisForm diagnosisForm = new();
+    private readonly List<PlantIdentificationResult> identificationResults = new();
+    private PlantPhoto? analysisResult;
+
+    private async Task HandleFileAsync(InputFileChangeEventArgs args)
+    {
+        diagnosisError = null;
+        uploadError = null;
+        identificationResults.Clear();
+        analysisResult = null;
+
+        try
+        {
+            var file = args.File;
+            if (file is null)
+            {
+                return;
+            }
+
+            using var stream = new MemoryStream();
+            await file.OpenReadStream(4 * 1024 * 1024).CopyToAsync(stream);
+            uploadedBytes = stream.ToArray();
+            var base64 = Convert.ToBase64String(uploadedBytes);
+            previewImage = $"data:{file.ContentType};base64,{base64}";
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"No pudimos leer la imagen: {ex.Message}";
+            uploadedBytes = null;
+            previewImage = null;
+        }
+    }
+
+    private async Task RunDiagnosisAsync()
+    {
+        if (uploadedBytes is null || isAnalyzing)
+        {
+            return;
+        }
+
+        try
+        {
+            isAnalyzing = true;
+            diagnosisError = null;
+            identificationResults.Clear();
+
+            using (var ms = new MemoryStream(uploadedBytes))
+            {
+                var candidates = await IdentificationService.IdentifyAsync(ms);
+                identificationResults.AddRange(candidates);
+            }
+
+            var virtualPhoto = new PlantPhoto
+            {
+                FilePath = previewImage ?? "diagnosis",
+                AnalysisSummary = $"Ambiente: {diagnosisForm.EnvironmentContext}. {diagnosisForm.SymptomNotes}".Trim(),
+                TakenAt = DateTime.UtcNow
+            };
+
+            analysisResult = await PhotoAnalysisService.AnalyzePhotoAsync(virtualPhoto);
+        }
+        catch (Exception ex)
+        {
+            diagnosisError = ex.Message;
+        }
+        finally
+        {
+            isAnalyzing = false;
+        }
+    }
+    private class DiagnosisForm
+    {
+        public string SymptomNotes { get; set; } = string.Empty;
+        public string EnvironmentContext { get; set; } = "Interior";
+    }
+}

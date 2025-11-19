@@ -1,0 +1,199 @@
+@page "/zones"
+@rendermode InteractiveServer
+
+@inject HomeZoneService ZoneService
+
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Mis ambientes</h1>
+        <p class="text-muted mb-0">Organiza tus zonas de la casa para asignarlas a cada planta.</p>
+    </div>
+    <button class="btn btn-primary" @onclick="StartCreate">Agregar ambiente</button>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<div class="row g-3">
+    @foreach (var zone in zones)
+    {
+        var isDefault = defaultZoneNames.Contains(zone.Name);
+        <div class="col-12 col-md-6 col-xl-4">
+            <div class="home-zone-card">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <p class="fw-semibold mb-0">@zone.Name</p>
+                        <small class="text-muted">@(!string.IsNullOrWhiteSpace(zone.AreaType) ? zone.AreaType : "Sin tipo")</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary btn-sm"
+                                @onclick="@(() => Edit(zone))"
+                                disabled="@isDefault"
+                                title="@(isDefault ? "Ambiente base" : "Editar ambiente")">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm"
+                                @onclick="@(() => ConfirmDelete(zone))"
+                                disabled="@isDefault"
+                                title="@(isDefault ? "No se puede eliminar" : "Eliminar ambiente")">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted mb-0">@(!string.IsNullOrWhiteSpace(zone.Notes) ? zone.Notes : "Sin notas.")</p>
+                @if (isDefault)
+                {
+                    <small class="text-muted d-block mt-2">Ambiente base incluido por defecto.</small>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@if (showForm)
+{
+    <div class="home-zone-modal">
+        <div class="home-zone-modal-content">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">@((editingZone?.Id is null) ? "Agregar ambiente" : "Editar ambiente")</h5>
+                <button class="btn btn-link text-muted" @onclick="CloseForm">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="@editingZone" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+                <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <InputText class="form-control" @bind-Value="editingZone!.Name" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Tipo</label>
+                    <InputSelect class="form-select" @bind-Value="editingZone!.AreaType">
+                        <option value="">Selecciona</option>
+                        <option value="Interior">Interior</option>
+                        <option value="Exterior">Exterior</option>
+                        <option value="Mixto">Mixto</option>
+                    </InputSelect>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notas</label>
+                    <InputTextArea class="form-control" @bind-Value="editingZone!.Notes" rows="3" />
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary flex-fill" type="submit" disabled="@isSaving">
+                        @(isSaving ? "Guardando..." : "Guardar ambiente")
+                    </button>
+                    <button class="btn btn-outline-secondary flex-fill" type="button" @onclick="CloseForm">Cancelar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<HomeZone> zones = new();
+    private readonly HashSet<string> defaultZoneNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Sala", "Comedor", "Cocina", "Dormitorio", "Estudio", "Patio", "Balcón", "Terraza", "Jardín", "Otro"
+    };
+    private HomeZone? editingZone;
+    private bool showForm;
+    private bool isSaving;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadZonesAsync();
+    }
+
+    private async Task LoadZonesAsync()
+    {
+        try
+        {
+            zones.Clear();
+            zones.AddRange(await ZoneService.GetZonesAsync());
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void StartCreate()
+    {
+        editingZone = new HomeZone();
+        showForm = true;
+    }
+
+    private void Edit(HomeZone zone)
+    {
+        if (defaultZoneNames.Contains(zone.Name))
+        {
+            return;
+        }
+
+        editingZone = new HomeZone
+        {
+            Id = zone.Id,
+            Name = zone.Name,
+            AreaType = zone.AreaType,
+            Notes = zone.Notes
+        };
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        editingZone = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingZone is null || string.IsNullOrWhiteSpace(editingZone.Name))
+        {
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+            if (zones.Any(z => z.Id == editingZone.Id))
+            {
+                await ZoneService.UpdateZoneAsync(editingZone);
+            }
+            else
+            {
+                await ZoneService.AddZoneAsync(editingZone);
+            }
+            await LoadZonesAsync();
+            CloseForm();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ConfirmDelete(HomeZone zone)
+    {
+        if (zone is null || defaultZoneNames.Contains(zone.Name)) return;
+        try
+        {
+            await ZoneService.DeleteZoneAsync(zone.Id);
+            await LoadZonesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

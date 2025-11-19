@@ -1,0 +1,72 @@
+@page "/weather"
+@rendermode InteractiveServer
+
+@inject WeatherService WeatherService
+
+<h1 class="mb-4">Clima</h1>
+
+<EditForm Model="@request" OnValidSubmit="@ConsultAsync">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Latitud</label>
+            <InputNumber TValue="double" class="form-control" @bind-Value="request.Latitude" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Longitud</label>
+            <InputNumber TValue="double" class="form-control" @bind-Value="request.Longitude" />
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button class="btn btn-primary w-100" type="submit" disabled="@isLoading">
+                @(isLoading ? "Consultando..." : "Consultar")
+            </button>
+        </div>
+    </div>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3">@errorMessage</div>
+}
+else if (weather is not null)
+{
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Condiciones actuales</h5>
+            <p class="display-6">@weather.TemperatureC °C</p>
+            <p class="mb-0">Humedad: @weather.Humidity %</p>
+            <p class="mb-0">Condiciones: @weather.Conditions</p>
+            <p class="text-muted mb-0"><small>Actualizado: @weather.RetrievedAt.ToLocalTime()</small></p>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly WeatherRequest request = new() { Latitude = -5.19, Longitude = -80.63 };
+    private WeatherInfo? weather;
+    private string? errorMessage;
+    private bool isLoading;
+
+    private async Task ConsultAsync()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            weather = await WeatherService.GetCurrentWeatherAsync(request.Latitude, request.Longitude);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class WeatherRequest
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+    }
+}

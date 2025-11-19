@@ -1,0 +1,667 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --accent: #2dd282;
+    --accent-strong: #12b065;
+    --accent-soft: rgba(45, 210, 130, 0.2);
+    --bg: #eff2f9;
+    --bg-soft: #f8fafa;
+    --text: #0f1722;
+    --text-muted: #6b778c;
+    --border: rgba(15, 23, 34, 0.08);
+    --card: #ffffff;
+    --shadow: 0 20px 45px rgba(15, 23, 34, 0.08);
+}
+
+html, body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    margin: 0;
+    min-height: 100%;
+}
+
+a {
+    text-decoration: none;
+}
+
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 270px;
+    background: linear-gradient(180deg, #ffffff 0%, #f2f6fb 100%);
+    border-right: 1px solid var(--border);
+    padding: 2rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    align-self: flex-start;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text);
+}
+
+.brand-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 1.5rem;
+    box-shadow: 0 18px 30px rgba(45, 210, 130, 0.3);
+}
+
+.btn-toggle-mode {
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-weight: 500;
+    padding: 0.35rem 1rem;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: 0.2s ease;
+}
+
+.nav-link .nav-icon {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background-color: rgba(15, 23, 34, 0.05);
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background-color: var(--accent-soft);
+    color: var(--text);
+    transform: translateX(4px);
+}
+
+.nav-link.active .nav-icon,
+.nav-link:hover .nav-icon {
+    background-color: var(--accent);
+    color: #fff;
+}
+
+.content {
+    flex: 1;
+    background-color: var(--bg);
+    padding: 2.5rem 3.5rem;
+    display: flex;
+    justify-content: center;
+}
+
+.content-inner {
+    width: min(1120px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.card,
+.plant-card {
+    background-color: var(--card);
+    border-radius: 18px;
+    border: none;
+    box-shadow: var(--shadow);
+}
+
+.plant-card {
+    overflow: hidden;
+}
+
+.btn-success,
+.btn-primary {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    border-radius: 1rem;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+}
+
+.btn-success:hover,
+.btn-primary:hover {
+    background-color: var(--accent-strong);
+    border-color: var(--accent-strong);
+}
+
+.btn-outline-secondary {
+    border-radius: 1rem;
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+
+.btn-outline-danger {
+    border-radius: 1rem;
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    padding: 0.85rem 1rem;
+    background-color: #fff;
+    font-size: 0.95rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 0.15rem rgba(45, 210, 130, 0.25);
+}
+
+.map-picker {
+    height: 280px;
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.location-results .list-group-item {
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    margin-bottom: 0.45rem;
+}
+
+.zone-manager .zone-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.zone-chip {
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.location-search .input-group-text {
+    background-color: transparent;
+    border-right: 0;
+}
+
+.location-search .form-control {
+    border-left: 0;
+}
+
+.badge.bg-success,
+.badge.bg-info {
+    border-radius: 999px;
+    padding: 0.2rem 0.8rem;
+    font-weight: 600;
+}
+
+.dark-mode body,
+.dark-mode .app-shell {
+    background: #0f1216;
+    color: #e9edf2;
+}
+
+.dark-mode .sidebar {
+    background: linear-gradient(180deg, #101417 0%, #0b0e12 100%);
+    border-right-color: rgba(255,255,255,0.08);
+}
+
+.dark-mode .brand {
+    color: #fff;
+}
+
+.dark-mode .content {
+    background: #070a0c;
+}
+
+.dark-mode .card,
+.dark-mode .plant-card,
+.dark-mode .content-inner {
+    background-color: #11161b;
+    color: #f2f6fb;
+    box-shadow: none;
+}
+
+.dark-mode .form-control,
+.dark-mode .form-select {
+    background-color: #0d1014;
+    color: inherit;
+    border-color: rgba(255,255,255,0.15);
+}
+
+.dark-mode .btn-outline-secondary {
+    border-color: rgba(255,255,255,0.15);
+    color: #cdd3df;
+}
+
+.plant-detail-card {
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+}
+
+.plant-detail-card.hero {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-hero-img {
+    border-radius: 18px;
+    width: 100%;
+    object-fit: cover;
+    max-height: 320px;
+}
+
+.detail-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.stat-chip {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border-radius: 999px;
+    padding: 0.35rem 0.95rem;
+    font-weight: 600;
+    display: inline-flex;
+    flex-direction: column;
+}
+
+.stat-chip small {
+    text-transform: uppercase;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    color: rgba(0,0,0,0.55);
+}
+
+.detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.climate-card {
+    border-radius: 18px;
+    background: var(--bg-soft);
+    padding: 1rem 1.2rem;
+}
+
+.climate-temp {
+    font-size: 2.4rem;
+    font-weight: 600;
+}
+
+.detail-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+    background: var(--bg-soft);
+    padding: 0.4rem;
+    border-radius: 999px;
+}
+
+.detail-tab {
+    border: none;
+    background: transparent;
+    padding: 0.5rem 1.3rem;
+    border-radius: 999px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.detail-tab.active {
+    background: var(--card);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+
+.care-card,
+.requirement-card {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.care-icon,
+.requirement-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    background: var(--bg-soft);
+    display: grid;
+    place-items: center;
+    font-size: 1.3rem;
+    color: var(--accent-strong);
+}
+
+.care-icon.watering { color: #3498db; background: rgba(52, 152, 219, 0.1); }
+.care-icon.fertilizing { color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+.care-icon.care { color: #9c6bff; background: rgba(156, 107, 255, 0.1); }
+
+.info-block {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+}
+
+.info-section + .info-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.today-header h1 {
+    font-size: 2rem;
+}
+
+.today-summary-card {
+    background: var(--card);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 1rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.today-summary-card .summary-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    display: grid;
+    place-items: center;
+    font-size: 1.4rem;
+}
+
+.today-summary-card.watering .summary-icon {
+    background: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+}
+
+.today-summary-card.fertilizing .summary-icon {
+    background: rgba(255, 152, 0, 0.18);
+    color: #ff9800;
+}
+
+.today-summary-card.care .summary-icon {
+    background: rgba(156, 107, 255, 0.15);
+    color: #9c6bff;
+}
+
+.summary-label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.today-section {
+    margin-top: 2rem;
+}
+
+.today-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-pill {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+.section-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: var(--bg-soft);
+    color: var(--text-muted);
+    display: grid;
+    place-items: center;
+    font-size: 1.4rem;
+}
+
+.today-task-card {
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.task-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-chip {
+    border-radius: 999px;
+    padding: 0.25rem 0.9rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    background-color: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.task-chip.overdue {
+    background-color: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
+.task-chip.today {
+    background-color: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+}
+
+.task-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 14px;
+    background-color: var(--bg-soft);
+}
+
+.btn-ghost {
+    border-radius: 1rem;
+    border-color: var(--border);
+    color: var(--text-muted);
+}
+
+@media (max-width: 992px) {
+    .sidebar {
+        position: static;
+        height: auto;
+        overflow: visible;
+    }
+
+    .content {
+        padding: 1.5rem;
+    }
+}
+
+.timeline-snippet {
+    border-radius: 16px;
+    background: var(--bg-soft);
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.ai-card {
+    border: 1px dashed rgba(15, 23, 34, 0.15);
+}
+
+.ai-item + .ai-item {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(15, 23, 34, 0.08);
+}
+
+.diagnosis-upload {
+    border: 2px dashed rgba(15, 23, 34, 0.15);
+    border-radius: 24px;
+    padding: 1rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.diagnosis-upload .placeholder {
+    color: var(--text-muted);
+    padding: 3rem 0;
+}
+
+.diagnosis-upload .placeholder i {
+    font-size: 2rem;
+    display: block;
+}
+
+.diagnosis-upload input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.diagnosis-card {
+    border-radius: 22px;
+    padding: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 34, 0.08);
+}
+
+@media (max-width: 992px) {
+    .sidebar {
+        padding: 1.5rem;
+    }
+
+    .sidebar-nav {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .sidebar-nav.show {
+        max-height: 800px;
+    }
+
+    .content {
+        padding: 1.5rem;
+    }
+}
+
+@media (min-width: 992px) {
+    .sidebar-nav {
+        max-height: none !important;
+    }
+}
+
+.d-lg-none {
+    display: none;
+}
+
+@media (max-width: 992px) {
+    .d-lg-none {
+        display: block !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-shell {
+        flex-direction: column;
+    }
+
+    .content {
+        padding: 1rem;
+    }
+
+    .history-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .timeline-item {
+        flex-direction: column;
+    }
+
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .timeline-snippet {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .diagnosis-upload img {
+        max-height: 320px;
+        object-fit: cover;
+    }
+
+    .zone-pill-group {
+        flex-direction: column;
+    }
+
+    .lightbox-body {
+        max-width: 100%;
+        padding: 1rem;
+    }
+
+    .plant-card .card-img-top {
+        height: 200px;
+    }
+}

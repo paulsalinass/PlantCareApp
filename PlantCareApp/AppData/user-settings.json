@@ -1,0 +1,14 @@
+{
+  "displayName": "Plant lover",
+  "planTier": "Free",
+  "enableAiInsights": true,
+  "enableCommunity": false,
+  "notifications": {
+    "wateringAlerts": true,
+    "fertilizingAlerts": true,
+    "pruningAlerts": true,
+    "emailChannel": true,
+    "pushChannel": false,
+    "quietHours": "22:00 - 07:00"
+  }
+}

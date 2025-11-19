@@ -1,0 +1,104 @@
+@page "/chat"
+@rendermode InteractiveServer
+
+@inject ChatService ChatService
+@inject PlantService PlantService
+
+<h1 class="mb-4">Chat IA (prototipo)</h1>
+
+<EditForm Model="@chatRequest" OnValidSubmit="@SendMessageAsync">
+    <div class="row g-3 align-items-end mb-3">
+        <div class="col-md-4">
+            <label class="form-label">Planta</label>
+            <InputNumber class="form-control" @bind-Value="chatRequest.PlantId" />
+            <div class="form-text">Ingresa el ID de la planta (por ahora).</div>
+        </div>
+        <div class="col-md-8">
+            <label class="form-label">Mensaje</label>
+            <InputTextArea class="form-control" @bind-Value="chatRequest.Message" rows="3" />
+        </div>
+    </div>
+    <button class="btn btn-primary" type="submit" disabled="@isSending">@(isSending ? "Enviando..." : "Enviar")</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(formError))
+{
+    <div class="alert alert-danger mt-3">@formError</div>
+}
+
+@if (conversation is not null)
+{
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-body">
+            <h5 class="card-title">@conversation.Title</h5>
+            @foreach (var message in conversation.Messages.OrderBy(m => m.CreatedAt))
+            {
+                <div class="chat-bubble @(message.Sender == MessageSender.Assistant ? "assistant" : "user") mb-3">
+                    <strong>@(message.Sender == MessageSender.Assistant ? "Asistente" : "Tú"):</strong>
+                    <p class="mb-0">@message.Content</p>
+                </div>
+            }
+        </div>
+    </div>
+}
+else if (messages.Count > 0)
+{
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-body">
+            @foreach (var message in messages)
+            {
+                <div class="chat-bubble @(message.Sender == MessageSender.Assistant ? "assistant" : "user") mb-3">
+                    <strong>@(message.Sender == MessageSender.Assistant ? "Asistente" : "Tú"):</strong>
+                    <p class="mb-0">@message.Content</p>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private readonly ChatRequest chatRequest = new();
+    private PlantConversation? conversation;
+    private readonly List<ChatMessage> messages = new();
+    private string? formError;
+    private bool isSending;
+
+    private async Task SendMessageAsync()
+    {
+        if (chatRequest.PlantId <= 0 || string.IsNullOrWhiteSpace(chatRequest.Message))
+        {
+            formError = "Debes indicar la planta y un mensaje.";
+            return;
+        }
+
+        try
+        {
+            isSending = true;
+            formError = null;
+
+            conversation = await ChatService.GetOrCreateConversationAsync(chatRequest.PlantId);
+            await ChatService.AddMessageAsync(conversation.Id, MessageSender.User, chatRequest.Message.Trim());
+
+            // Respuesta simulada
+            await ChatService.AddMessageAsync(conversation.Id, MessageSender.Assistant,
+                "Respuesta simulada de IA. Aquí aparecerán recomendaciones personalizadas.");
+
+            conversation = await ChatService.GetOrCreateConversationAsync(chatRequest.PlantId);
+            chatRequest.Message = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private class ChatRequest
+    {
+        public int PlantId { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
+}

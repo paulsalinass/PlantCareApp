@@ -1,0 +1,564 @@
+@page "/plants/add"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+@inject PlantService PlantService
+@inject ImageStorageService ImageStorageService
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+@inject LocationLookupService LocationLookupService
+@inject HomeZoneService HomeZoneService
+
+<h1 class="mb-4">Agregar planta</h1>
+
+@if (!string.IsNullOrEmpty(formError))
+{
+    <div class="alert alert-danger">@formError</div>
+}
+
+<EditForm Model="@plant" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-4">
+        <div class="col-12 col-lg-7">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Información básica</h5>
+
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <InputText class="form-control" @bind-Value="plant.Name" />
+                        <ValidationMessage For="@(() => plant.Name)" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Especie</label>
+                        <InputText class="form-control" @bind-Value="plant.Species" />
+                        <ValidationMessage For="@(() => plant.Species)" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Ciudad</label>
+                            <InputText class="form-control" @bind-Value="plant.LocationName" readonly="@(!isLocationEditable)" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">País</label>
+                            <InputText class="form-control" @bind-Value="plant.Country" readonly="@(!isLocationEditable)" />
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-link btn-sm p-0 mb-2" @onclick="ToggleLocationEditable">
+                        @(isLocationEditable ? "Bloquear campos" : "Editar manualmente")
+                    </button>
+
+                        <div class="mb-3">
+                            <label class="form-label">Zona en el hogar</label>
+                            <input class="form-control" list="zoneSuggestionsAdd" @bind="plant.LocationArea" placeholder="Ej. Sala, Patio, Balcón" />
+                        <datalist id="zoneSuggestionsAdd">
+                            @foreach (var zone in zoneOptions)
+                            {
+                                <option value="@zone"></option>
+                            }
+                        </datalist>
+                        <div class="d-flex justify-content-between align-items-center mt-1">
+                            <small class="text-muted">Agrupa tus plantas por ambientes.</small>
+                            <button type="button" class="btn btn-link btn-sm p-0" @onclick="ToggleZoneManager">
+                                @(showZoneManager ? "Cerrar gestor" : "Administrar zonas")
+                            </button>
+                        </div>
+                        @if (showZoneManager)
+                        {
+                            <div class="card border-0 shadow-sm mt-2 zone-manager">
+                                <div class="card-body">
+                                    <div class="input-group input-group-sm mb-2">
+                                        <input class="form-control" placeholder="Nueva zona (ej. Sala TV)" @bind="newZoneName" />
+                                        <button type="button" class="btn btn-success" @onclick="AddCustomZoneAsync" disabled="@isZoneOperation">
+                                            @(isZoneOperation ? "Guardando..." : "Agregar")
+                                        </button>
+                                    </div>
+                                    <div class="zone-list">
+                                        @foreach (var zone in zoneOptions.OrderBy(z => z))
+                                        {
+                                            var isDefault = defaultZoneSet.Contains(zone);
+                                            <span class="zone-chip">
+                                                @zone
+                                                @if (!isDefault)
+                                                {
+                                                    <button type="button" class="btn-close btn-close-white ms-1" aria-label="Quitar" @onclick="() => RemoveZoneAsync(zone)" disabled="@isZoneOperation"></button>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(zoneError))
+                                    {
+                                        <div class="alert alert-warning mb-0 mt-3 small">@zoneError</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-3 location-search">
+                        <label class="form-label">Buscar ciudad</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <InputText class="form-control" placeholder="Ej. Piura, Lima, Cusco" @bind-Value="locationSearch" />
+                            <button type="button" class="btn btn-outline-secondary" disabled="@isSearchingLocation" @onclick="SearchLocationAsync">
+                                @(isSearchingLocation ? "Buscando..." : "Buscar")
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(locationSearchError))
+                        {
+                            <div class="text-danger small mt-1">@locationSearchError</div>
+                        }
+                        @if (locationResults.Count > 0)
+                        {
+                            <div class="list-group mt-2 location-results">
+                                @foreach (var suggestion in locationResults)
+                                {
+                                    <button type="button" class="list-group-item list-group-item-action" @onclick="() => ApplyLocation(suggestion)">
+                                        <div class="fw-semibold">@suggestion.Name</div>
+                                        <div class="text-muted small">
+                                            @(string.IsNullOrWhiteSpace(suggestion.Country) ? "Sin país" : suggestion.Country)
+                                            @if (!string.IsNullOrWhiteSpace(suggestion.Timezone))
+                                            {
+                                                <span> · @suggestion.Timezone</span>
+                                            }
+                                            <span> · @suggestion.Latitude.ToString("F2"), @suggestion.Longitude.ToString("F2")</span>
+                                        </div>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <InputCheckbox class="form-check-input" @bind-Value="plant.IsIndoors" />
+                        <label class="form-check-label">Interior</label>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Horas de sol estimadas</label>
+                            <InputNumber TValue="int?" class="form-control" @bind-Value="plant.EstimatedSunHours" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Frecuencia de riego (días)</label>
+                            <InputNumber TValue="int?" class="form-control" @bind-Value="plant.WateringFrequencyDays" />
+                            <div class="form-text">Usaremos este valor para recordatorios.</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Último riego</label>
+                            <InputDate TValue="DateTime?" class="form-control" @bind-Value="plant.LastWateredAt" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Notas</label>
+                            <InputTextArea class="form-control" @bind-Value="plant.Notes" rows="3" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title">Ubicación precisa (opcional)</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Latitud</label>
+                            <InputNumber TValue="double?" class="form-control" @bind-Value="plant.Latitude" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Longitud</label>
+                            <InputNumber TValue="double?" class="form-control" @bind-Value="plant.Longitude" />
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@isRequestingLocation"
+                            @onclick="UseCurrentLocationAsync">
+                        @(isRequestingLocation ? "Obteniendo ubicación..." : "Usar ubicación actual")
+                    </button>
+                    @if (!string.IsNullOrEmpty(locationMessage))
+                    {
+                        <div class="form-text mt-2">@locationMessage</div>
+                    }
+
+                    <div class="mt-3 map-picker" @ref="mapElement"></div>
+                    <div class="form-text">Haz clic en el mapa o arrastra el marcador para fijar un punto exacto.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Foto principal</h5>
+                    <p class="text-muted">Formatos permitidos: JPG, PNG, WEBP (máx. 4 MB)</p>
+
+                    <InputFile OnChange="OnImageSelected" />
+                    @if (!string.IsNullOrEmpty(uploadError))
+                    {
+                        <div class="text-danger small mt-2">@uploadError</div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(previewImage))
+                    {
+                        <img src="@previewImage"
+                             alt="Previsualización"
+                             class="img-fluid rounded mt-3 shadow-sm"
+                             style="max-height: 300px; object-fit: cover;" />
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-3">
+        <button class="btn btn-success px-4" type="submit" disabled="@isSaving">
+            @(isSaving ? "Guardando..." : "Guardar planta")
+        </button>
+        <NavLink class="btn btn-outline-secondary" href="/plants">Cancelar</NavLink>
+    </div>
+</EditForm>
+
+@code {
+    private readonly Plant plant = new();
+    private IBrowserFile? selectedFile;
+    private string? previewImage;
+    private string? uploadError;
+    private string? formError;
+    private string? locationMessage;
+    private string? locationSearch;
+    private string? locationSearchError;
+    private bool isLocationEditable;
+    private readonly List<LocationSuggestion> locationResults = new();
+    private readonly List<HomeZone> homeZones = new();
+    private readonly string[] defaultZones = { "Sala", "Comedor", "Cocina", "Dormitorio", "Estudio", "Patio", "Balcón", "Terraza", "Jardín", "Otro" };
+    private readonly HashSet<string> defaultZoneSet = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> zoneOptions = new();
+    private string? newZoneName;
+    private bool showZoneManager;
+    private bool zonesLoaded;
+    private bool isZoneOperation;
+    private string? zoneError;
+    private bool isSaving;
+    private bool isRequestingLocation;
+    private bool isSearchingLocation;
+    private ElementReference mapElement;
+    private DotNetObjectReference<AddPlant>? mapDotNetRef;
+    private bool mapInitialized;
+
+    protected override void OnInitialized()
+    {
+        plant.WateringFrequencyDays = 7;
+        plant.LastWateredAt = DateTime.Today;
+        foreach (var zone in defaultZones)
+        {
+            defaultZoneSet.Add(zone);
+            AddZoneOption(zone);
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (!string.IsNullOrEmpty(uri.Query))
+        {
+            var query = QueryHelpers.ParseQuery(uri.Query);
+            if (query.TryGetValue("species", out var speciesValue) && string.IsNullOrWhiteSpace(plant.Species))
+            {
+                plant.Species = speciesValue!;
+            }
+            if (query.TryGetValue("photoPath", out var photoValue))
+            {
+                var path = photoValue.ToString();
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    plant.MainPhotoPath = path;
+                    previewImage = path;
+                }
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            mapDotNetRef = DotNetObjectReference.Create(this);
+            await Js.InvokeVoidAsync("plantCareMap.init", mapElement, mapDotNetRef, plant.Latitude ?? -5.19, plant.Longitude ?? -80.63);
+            mapInitialized = true;
+            await LoadZonesAsync();
+        }
+    }
+
+    private async Task LoadZonesAsync(bool forceRefresh = false)
+    {
+        if (zonesLoaded && !forceRefresh)
+        {
+            return;
+        }
+
+        try
+        {
+            var zones = await HomeZoneService.GetZonesAsync();
+            homeZones.Clear();
+            homeZones.AddRange(zones);
+            foreach (var zone in zones)
+            {
+                AddZoneOption(zone.Name);
+            }
+            zoneError = null;
+        }
+        catch (Exception ex)
+        {
+            zoneError = $"No se pudieron cargar tus ambientes: {ex.Message}";
+        }
+        finally
+        {
+            zonesLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private void AddZoneOption(string? zone)
+    {
+        if (string.IsNullOrWhiteSpace(zone))
+        {
+            return;
+        }
+
+        if (!zoneOptions.Any(z => string.Equals(z, zone, StringComparison.OrdinalIgnoreCase)))
+        {
+            zoneOptions.Add(zone);
+        }
+    }
+
+    private async Task AddCustomZoneAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newZoneName) || isZoneOperation)
+        {
+            return;
+        }
+
+        var normalized = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(newZoneName.Trim());
+
+        try
+        {
+            isZoneOperation = true;
+            zoneError = null;
+            var created = await HomeZoneService.AddZoneAsync(new HomeZone { Name = normalized });
+            plant.LocationArea = created.Name;
+            newZoneName = string.Empty;
+            await LoadZonesAsync(forceRefresh: true);
+        }
+        catch (Exception ex)
+        {
+            zoneError = ex.Message;
+        }
+        finally
+        {
+            isZoneOperation = false;
+        }
+    }
+
+    private async Task RemoveZoneAsync(string zone)
+    {
+        if (defaultZoneSet.Contains(zone) || isZoneOperation)
+        {
+            return;
+        }
+
+        try
+        {
+            isZoneOperation = true;
+            zoneError = null;
+            var entity = homeZones.FirstOrDefault(z => string.Equals(z.Name, zone, StringComparison.OrdinalIgnoreCase));
+            if (entity is not null)
+            {
+                await HomeZoneService.DeleteZoneAsync(entity.Id);
+            }
+
+            zoneOptions.RemoveAll(z => string.Equals(z, zone, StringComparison.OrdinalIgnoreCase));
+            await LoadZonesAsync(forceRefresh: true);
+        }
+        catch (Exception ex)
+        {
+            zoneError = ex.Message;
+        }
+        finally
+        {
+            isZoneOperation = false;
+        }
+    }
+
+    private void ToggleZoneManager() => showZoneManager = !showZoneManager;
+
+    private void ToggleLocationEditable() => isLocationEditable = !isLocationEditable;
+
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        uploadError = null;
+        previewImage = null;
+        selectedFile = null;
+
+        if (e.File is null)
+        {
+            return;
+        }
+
+        try
+        {
+            selectedFile = e.File;
+            using var stream = selectedFile.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+            var buffer = new byte[Math.Min(selectedFile.Size, 400 * 1024)];
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length));
+            previewImage = $"data:{selectedFile.ContentType};base64,{Convert.ToBase64String(buffer, 0, read)}";
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"No se pudo leer la imagen: {ex.Message}";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            isSaving = true;
+            formError = null;
+
+            if (selectedFile is not null)
+            {
+                plant.MainPhotoPath = await ImageStorageService.SavePlantImageAsync(selectedFile);
+            }
+
+            await PlantService.AddPlantAsync(plant);
+            Navigation.NavigateTo("/plants");
+        }
+        catch (Exception ex)
+        {
+            formError = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task UseCurrentLocationAsync()
+    {
+        if (isRequestingLocation)
+        {
+            return;
+        }
+
+        try
+        {
+            isRequestingLocation = true;
+            locationMessage = "Solicitando ubicación al navegador...";
+            var coords = await Js.InvokeAsync<GeoResult>("plantCare.getCurrentPosition");
+            plant.Latitude = Math.Round(coords.Latitude, 6);
+            plant.Longitude = Math.Round(coords.Longitude, 6);
+            locationMessage = $"Ubicación detectada (±{coords.Accuracy:N0} m)";
+
+            var suggestion = await LocationLookupService.ReverseLookupAsync(coords.Latitude, coords.Longitude);
+            if (suggestion is not null)
+            {
+                plant.LocationName = suggestion.Name;
+                plant.Country = suggestion.Country;
+            }
+
+            await UpdateMapAsync();
+        }
+        catch (JSException jsEx)
+        {
+            locationMessage = $"No se pudo obtener la ubicación: {jsEx.Message}";
+        }
+        catch
+        {
+            locationMessage = "No se pudo obtener la ubicación actual.";
+        }
+        finally
+        {
+            isRequestingLocation = false;
+        }
+    }
+
+    private async Task SearchLocationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(locationSearch))
+        {
+            locationResults.Clear();
+            locationSearchError = "Ingresa el nombre de una ciudad.";
+            return;
+        }
+
+        try
+        {
+            isSearchingLocation = true;
+            locationSearchError = null;
+            locationResults.Clear();
+            var results = await LocationLookupService.SearchAsync(locationSearch.Trim());
+            if (results.Count == 0)
+            {
+                locationSearchError = "No encontramos coincidencias.";
+            }
+            else
+            {
+                locationResults.AddRange(results);
+            }
+        }
+        catch (Exception ex)
+        {
+            locationSearchError = ex.Message;
+        }
+        finally
+        {
+            isSearchingLocation = false;
+        }
+    }
+
+    private async Task ApplyLocation(LocationSuggestion suggestion)
+    {
+        plant.LocationName = suggestion.Name;
+        plant.Country = suggestion.Country;
+        plant.Latitude = Math.Round(suggestion.Latitude, 6);
+        plant.Longitude = Math.Round(suggestion.Longitude, 6);
+        locationMessage = $"Ubicación establecida: {suggestion.Name}, {suggestion.Country}";
+        locationResults.Clear();
+        locationSearch = suggestion.Name;
+        await UpdateMapAsync();
+    }
+
+    private async Task UpdateMapAsync()
+    {
+        if (mapInitialized)
+        {
+            await Js.InvokeVoidAsync("plantCareMap.update", mapElement, plant.Latitude ?? 0, plant.Longitude ?? 0);
+        }
+    }
+
+    [JSInvokable]
+    public Task OnMapLocationChanged(double latitude, double longitude)
+    {
+        plant.Latitude = Math.Round(latitude, 6);
+        plant.Longitude = Math.Round(longitude, 6);
+        locationMessage = $"Coordenadas seleccionadas: {latitude:F4}, {longitude:F4}";
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (mapInitialized)
+        {
+            await Js.InvokeVoidAsync("plantCareMap.dispose", mapElement);
+        }
+        mapDotNetRef?.Dispose();
+    }
+
+    private record GeoResult(double Latitude, double Longitude, double Accuracy);
+}

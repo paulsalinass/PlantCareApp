@@ -1,0 +1,189 @@
+@page "/identify"
+@rendermode InteractiveServer
+
+@inject PlantIdentificationService IdentificationService
+@inject ImageStorageService ImageStorage
+@inject NavigationManager Navigation
+
+<h1 class="mb-4">Identificar planta por foto</h1>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<div class="row g-4">
+    <div class="col-12 col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h5 class="card-title">Sube una foto</h5>
+                <p class="text-muted">Usaremos la imagen para sugerir posibles especies.</p>
+
+                <InputFile OnChange="OnImageSelected" />
+
+                @if (!string.IsNullOrEmpty(previewImage))
+                {
+                    <img src="@previewImage" alt="Previsualizacion" class="img-fluid rounded mt-3 shadow-sm" />
+                }
+
+                <button class="btn btn-primary mt-3" type="button" disabled="@(selectedFile is null || isAnalyzing)" @onclick="AnalyzeAsync">
+                    @(isAnalyzing ? "Analizando..." : "Analizar foto")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h5 class="card-title">Resultados</h5>
+
+                @if (isAnalyzing)
+                {
+                    <p>Procesando imagen...</p>
+                }
+                else if (results.Count == 0)
+                {
+                    <p class="text-muted">Aun no hay sugerencias. Sube una foto o utiliza la busqueda manual.</p>
+                }
+                else
+                {
+                    <div class="list-group mb-3">
+                        @foreach (var candidate in results)
+                        {
+                            <button type="button" class="list-group-item list-group-item-action @(selectedResult == candidate ? "active" : null)" @onclick="() => SelectCandidate(candidate)">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-semibold">@candidate.CommonName</div>
+                                        <small class="text-muted">@candidate.ScientificName</small>
+                                    </div>
+                                    <span>@($"{candidate.Confidence:P0}")</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(candidate.Summary))
+                                {
+                                    <p class="mb-0 mt-2 small">@candidate.Summary</p>
+                                }
+                            </button>
+                        }
+                    </div>
+
+                    if (selectedResult is not null)
+                    {
+                        <button class="btn btn-success" type="button" @onclick="CreatePlantFromSelection">
+                            Crear ficha con @selectedResult.CommonName
+                        </button>
+                    }
+                }
+
+                <hr />
+                <h6>Busqueda manual</h6>
+                <InputText class="form-control" placeholder="Buscar planta por nombre" @bind-Value="manualSearch" />
+                <button class="btn btn-link mt-2" type="button" disabled="@string.IsNullOrWhiteSpace(manualSearch)" @onclick="() => NavigateToAdd(manualSearch, null)">
+                    Usar este nombre
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private IBrowserFile? selectedFile;
+    private string? previewImage;
+    private bool isAnalyzing;
+    private string? errorMessage;
+    private readonly List<PlantIdentificationResult> results = new();
+    private PlantIdentificationResult? selectedResult;
+    private string? manualSearch;
+    private string? savedPhotoPath;
+
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        selectedResult = null;
+        results.Clear();
+        savedPhotoPath = null;
+        if (selectedFile is null)
+        {
+            previewImage = null;
+            return;
+        }
+
+        using var stream = selectedFile.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        previewImage = $"data:{selectedFile.ContentType};base64,{Convert.ToBase64String(memory.ToArray())}";
+    }
+
+    private async Task AnalyzeAsync()
+    {
+        if (selectedFile is null)
+        {
+            return;
+        }
+
+        try
+        {
+            isAnalyzing = true;
+            errorMessage = null;
+            results.Clear();
+            selectedResult = null;
+
+            using var stream = selectedFile.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+            var candidates = await IdentificationService.IdentifyAsync(stream);
+            results.AddRange(candidates);
+            selectedResult = results.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isAnalyzing = false;
+        }
+    }
+
+    private void SelectCandidate(PlantIdentificationResult candidate) => selectedResult = candidate;
+
+    private async Task CreatePlantFromSelection()
+    {
+        if (selectedResult is null)
+        {
+            return;
+        }
+
+        if (savedPhotoPath is null)
+        {
+            if (selectedFile is null)
+            {
+                errorMessage = "No encontramos la imagen subida.";
+                return;
+            }
+
+            savedPhotoPath = await ImageStorage.SavePlantImageAsync(selectedFile);
+        }
+
+        NavigateToAdd(selectedResult.ScientificName, savedPhotoPath);
+    }
+
+    private void NavigateToAdd(string? suggestedSpecies, string? photoPath)
+    {
+        var queryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(suggestedSpecies))
+        {
+            queryParts.Add($"species={Uri.EscapeDataString(suggestedSpecies)}");
+        }
+        if (!string.IsNullOrWhiteSpace(photoPath))
+        {
+            queryParts.Add($"photoPath={Uri.EscapeDataString(photoPath)}");
+        }
+
+        var url = "/plants/add";
+        if (queryParts.Count > 0)
+        {
+            url += "?" + string.Join("&", queryParts);
+        }
+
+        Navigation.NavigateTo(url);
+    }
+}
