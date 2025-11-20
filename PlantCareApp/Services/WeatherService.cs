@@ -48,114 +48,51 @@ public class WeatherService
 
     public async Task<WeatherInfo> GetCurrentWeatherAsync(double latitude, double longitude, string? locationLabel = null, CancellationToken cancellationToken = default)
     {
-        try
+        WeatherInfo? result = await TryFetchAdvancedAsync(latitude, longitude, locationLabel, cancellationToken);
+        if (result is not null)
         {
-            return await FetchAdvancedAsync(latitude, longitude, locationLabel, cancellationToken);
+            return result;
         }
-        catch (Exception ex) when (IsRecoverable(ex))
-        {
-            _logger.LogWarning(ex, "Falling back to basic weather data for {Lat},{Lon}", latitude, longitude);
-            var fallback = await TryFetchBasicAsync(latitude, longitude, locationLabel, cancellationToken);
-            if (fallback is not null)
-            {
-                return fallback;
-            }
 
-            throw;
+        result = await TryFetchBasicAsync(latitude, longitude, locationLabel, cancellationToken);
+        if (result is not null)
+        {
+            return result;
         }
+
+        throw new InvalidOperationException("No pudimos obtener datos meteorológicos en este momento. Comprueba tu conexión e inténtalo nuevamente.");
     }
 
-    private async Task<WeatherInfo> FetchAdvancedAsync(double latitude, double longitude, string? locationLabel, CancellationToken cancellationToken)
-    {
-        var invariant = CultureInfo.InvariantCulture;
-        var url =
-            $"https://api.open-meteo.com/v1/forecast?latitude={latitude.ToString(invariant)}&longitude={longitude.ToString(invariant)}" +
-            "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,apparent_temperature,pressure_msl,dew_point_2m,precipitation,cloud_cover" +
-            "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,weather_code,moon_phase" +
-            "&timezone=auto";
-
-        using var httpResponse = await _httpClient.GetAsync(url, cancellationToken);
-        if (!httpResponse.IsSuccessStatusCode)
-        {
-            var reason = httpResponse.ReasonPhrase ?? "respuesta no válida";
-            throw new InvalidOperationException($"No pudimos obtener datos meteorológicos ({(int)httpResponse.StatusCode}: {reason}).");
-        }
-
-        await using var stream = await httpResponse.Content.ReadAsStreamAsync(cancellationToken);
-        var response = await JsonSerializer.DeserializeAsync<WeatherResponse>(stream, SerializerOptions, cancellationToken);
-        if (response is null)
-        {
-            throw new InvalidOperationException("No recibimos datos meteorológicos.");
-        }
-
-        var current = response.Current;
-        if (current is null)
-        {
-            throw new InvalidOperationException("El proveedor no devolvió datos meteorológicos.");
-        }
-
-        var (daily, todayDetail) = BuildDaily(response.Daily);
-        var fallbackCode = todayDetail?.WeatherCode ?? 0;
-        var conditions = MapWeatherCode(current.WeatherCode ?? fallbackCode);
-        var retrievedAt = ParseDate(current.Time);
-
-        var snapshot = new WeatherSnapshot(
-            Math.Round(current.Temperature2m ?? 0, 1),
-            Math.Round(current.ApparentTemperature ?? current.Temperature2m ?? 0, 1),
-            (int)Math.Round(current.RelativeHumidity2m ?? 0),
-            conditions,
-            Math.Round((current.WindSpeed10m ?? 0) * 3.6, 1),
-            Math.Round(current.PressureMsl ?? 0, 0),
-            Math.Round(current.DewPoint2m ?? 0, 1),
-            Math.Round(current.CloudCover ?? 0, 0),
-            Math.Round(current.Precipitation ?? 0, 1),
-            Math.Round(todayDetail?.UvIndex ?? 0, 1),
-            todayDetail?.MoonPhase ?? 0,
-            todayDetail?.Sunrise ?? DateTime.MinValue,
-            todayDetail?.Sunset ?? DateTime.MinValue,
-            retrievedAt);
-
-        return new WeatherInfo(
-            locationLabel ?? "Ubicación seleccionada",
-            snapshot,
-            daily);
-    }
-
-    private async Task<WeatherInfo?> TryFetchBasicAsync(double latitude, double longitude, string? locationLabel, CancellationToken cancellationToken)
+    private async Task<WeatherInfo?> TryFetchAdvancedAsync(double latitude, double longitude, string? locationLabel, CancellationToken cancellationToken)
     {
         try
         {
             var invariant = CultureInfo.InvariantCulture;
             var url =
                 $"https://api.open-meteo.com/v1/forecast?latitude={latitude.ToString(invariant)}&longitude={longitude.ToString(invariant)}" +
-                "&current_weather=true" +
-                "&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,pressure_msl,precipitation,cloud_cover,wind_speed_10m" +
+                "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,apparent_temperature,pressure_msl,dew_point_2m,precipitation,cloud_cover" +
                 "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,weather_code,moon_phase" +
                 "&timezone=auto";
 
-            using var response = await _httpClient.GetAsync(url, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var basic = await JsonSerializer.DeserializeAsync<BasicWeatherResponse>(stream, SerializerOptions, cancellationToken);
-            var current = basic?.CurrentWeather;
-            if (current is null)
+            await using var stream = await _httpClient.GetStreamAsync(url, cancellationToken);
+            var response = await JsonSerializer.DeserializeAsync<WeatherResponse>(stream, SerializerOptions, cancellationToken);
+            if (response?.Current is not { } current)
             {
                 return null;
             }
 
-            var hourlySample = ExtractHourlySample(basic.Hourly, current.Time);
-            var (daily, todayDetail) = BuildDaily(basic.Daily);
-
+            var (daily, todayDetail) = BuildDaily(response.Daily);
+            var code = current.WeatherCode ?? todayDetail?.WeatherCode ?? 0;
             var snapshot = new WeatherSnapshot(
-                Math.Round(current.Temperature, 1),
-                Math.Round(hourlySample.ApparentTemperature ?? current.Temperature, 1),
-                (int)Math.Round(hourlySample.RelativeHumidity ?? 0),
-                MapWeatherCode(current.WeatherCode),
-                Math.Round(current.WindSpeed, 1),
-                Math.Round(hourlySample.Pressure ?? 0, 0),
-                Math.Round(hourlySample.DewPoint ?? 0, 1),
-                Math.Round(hourlySample.CloudCover ?? 0, 0),
-                Math.Round(hourlySample.Precipitation ?? 0, 1),
+                Math.Round(current.Temperature2m ?? 0, 1),
+                Math.Round(current.ApparentTemperature ?? current.Temperature2m ?? 0, 1),
+                (int)Math.Round(current.RelativeHumidity2m ?? 0),
+                MapWeatherCode(code),
+                Math.Round((current.WindSpeed10m ?? 0) * 3.6, 1),
+                Math.Round(current.PressureMsl ?? 0, 0),
+                Math.Round(current.DewPoint2m ?? 0, 1),
+                Math.Round(current.CloudCover ?? 0, 0),
+                Math.Round(current.Precipitation ?? 0, 1),
                 Math.Round(todayDetail?.UvIndex ?? 0, 1),
                 todayDetail?.MoonPhase ?? 0,
                 todayDetail?.Sunrise ?? DateTime.MinValue,
@@ -164,23 +101,62 @@ public class WeatherService
 
             return new WeatherInfo(locationLabel ?? "Ubicación seleccionada", snapshot, daily);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsRecoverable(ex))
         {
-            _logger.LogWarning(ex, "Basic weather fallback failed for {Lat},{Lon}", latitude, longitude);
+            _logger.LogWarning(ex, "Advanced weather call failed for {Lat},{Lon}", latitude, longitude);
+            return null;
+        }
+    }
+
+    private async Task<WeatherInfo?> TryFetchBasicAsync(double latitude, double longitude, string? locationLabel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var invariant = CultureInfo.InvariantCulture;
+            var url = $"https://api.open-meteo.com/v1/forecast?latitude={latitude.ToString(invariant)}&longitude={longitude.ToString(invariant)}&current_weather=true&timezone=auto";
+            await using var stream = await _httpClient.GetStreamAsync(url, cancellationToken);
+            var response = await JsonSerializer.DeserializeAsync<BasicWeatherResponse>(stream, SerializerOptions, cancellationToken);
+            var current = response?.CurrentWeather;
+            if (current is null)
+            {
+                return null;
+            }
+
+            var snapshot = new WeatherSnapshot(
+                Math.Round(current.Temperature, 1),
+                Math.Round(current.Temperature, 1),
+                0,
+                MapWeatherCode(current.WeatherCode),
+                Math.Round(current.WindSpeed, 1),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                DateTime.MinValue,
+                DateTime.MinValue,
+                ParseDate(current.Time));
+
+            return new WeatherInfo(locationLabel ?? "Ubicación seleccionada", snapshot, Array.Empty<DailyWeather>());
+        }
+        catch (Exception ex) when (IsRecoverable(ex))
+        {
+            _logger.LogWarning(ex, "Basic weather call failed for {Lat},{Lon}", latitude, longitude);
             return null;
         }
     }
 
     private static bool IsRecoverable(Exception ex) =>
-        ex is InvalidOperationException or HttpRequestException or JsonException;
+        ex is HttpRequestException or JsonException or InvalidOperationException;
 
     private static (List<DailyWeather> Daily, DailyDetail? Today) BuildDaily(DailyBlock? daily)
     {
-        var data = new List<DailyWeather>();
+        var output = new List<DailyWeather>();
         DailyDetail? today = null;
         if (daily?.Time is null)
         {
-            return (data, today);
+            return (output, today);
         }
 
         for (var i = 0; i < daily.Time.Length; i++)
@@ -199,41 +175,11 @@ public class WeatherService
                 GetValue(daily.MoonPhase, i),
                 code);
 
-            data.Add(detail.ToPublic());
+            output.Add(detail.ToPublic());
             today ??= detail;
         }
 
-        return (data, today);
-    }
-
-    private static HourlySample ExtractHourlySample(HourlyBlock? hourly, string referenceTime)
-    {
-        var data = hourly;
-        if (data is null || data.Time is null || data.Time.Length == 0)
-        {
-            return new HourlySample(null, null, null, null, null, null);
-        }
-
-        var idx = Array.IndexOf(data.Time, referenceTime);
-        if (idx < 0)
-        {
-            idx = data.Time.Length - 1;
-        }
-
-        var humidity = data.RelativeHumidity;
-        var apparent = data.ApparentTemperature;
-        var pressure = data.PressureMsl;
-        var dew = data.DewPoint;
-        var precip = data.Precipitation;
-        var cloud = data.CloudCover;
-
-        return new HourlySample(
-            GetValue(humidity, idx),
-            GetValue(apparent, idx),
-            GetValue(pressure, idx),
-            GetValue(dew, idx),
-            GetValue(precip, idx),
-            GetValue(cloud, idx));
+        return (output, today);
     }
 
     private static DateTime ParseDate(string? value)
@@ -295,8 +241,7 @@ public class WeatherService
 
     private record WeatherResponse(
         [property: JsonPropertyName("current")] CurrentWeather? Current,
-        [property: JsonPropertyName("daily")] DailyBlock? Daily,
-        [property: JsonPropertyName("hourly")] HourlyBlock? Hourly);
+        [property: JsonPropertyName("daily")] DailyBlock? Daily);
 
     private record CurrentWeather(
         [property: JsonPropertyName("time")] string Time,
@@ -309,17 +254,6 @@ public class WeatherService
         [property: JsonPropertyName("dew_point_2m")] double? DewPoint2m,
         [property: JsonPropertyName("precipitation")] double? Precipitation,
         [property: JsonPropertyName("cloud_cover")] double? CloudCover);
-
-    private record HourlyBlock(
-        [property: JsonPropertyName("time")] string[] Time,
-        [property: JsonPropertyName("temperature_2m")] double[]? Temperature,
-        [property: JsonPropertyName("relative_humidity_2m")] double[]? RelativeHumidity,
-        [property: JsonPropertyName("dew_point_2m")] double[]? DewPoint,
-        [property: JsonPropertyName("apparent_temperature")] double[]? ApparentTemperature,
-        [property: JsonPropertyName("pressure_msl")] double[]? PressureMsl,
-        [property: JsonPropertyName("precipitation")] double[]? Precipitation,
-        [property: JsonPropertyName("cloud_cover")] double[]? CloudCover,
-        [property: JsonPropertyName("wind_speed_10m")] double[]? WindSpeed10m);
 
     private record DailyBlock(
         [property: JsonPropertyName("time")] string[]? Time,
@@ -348,21 +282,11 @@ public class WeatherService
     }
 
     private record BasicWeatherResponse(
-        [property: JsonPropertyName("current_weather")] BasicCurrent? CurrentWeather,
-        [property: JsonPropertyName("hourly")] HourlyBlock? Hourly,
-        [property: JsonPropertyName("daily")] DailyBlock? Daily);
+        [property: JsonPropertyName("current_weather")] BasicCurrent? CurrentWeather);
 
     private record BasicCurrent(
         [property: JsonPropertyName("time")] string Time,
         [property: JsonPropertyName("temperature")] double Temperature,
         [property: JsonPropertyName("windspeed")] double WindSpeed,
         [property: JsonPropertyName("weathercode")] int WeatherCode);
-
-    private record HourlySample(
-        double? RelativeHumidity,
-        double? ApparentTemperature,
-        double? Pressure,
-        double? DewPoint,
-        double? Precipitation,
-        double? CloudCover);
 }

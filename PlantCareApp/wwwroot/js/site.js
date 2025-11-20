@@ -55,7 +55,7 @@ window.plantCareMap = (function () {
         }
 
         try {
-            const iconPath = "lib/leaflet/images/";
+            const iconPath = "/lib/leaflet/images/";
             L.Icon.Default.mergeOptions({
                 iconUrl: `${iconPath}marker-icon.png`,
                 iconRetinaUrl: `${iconPath}marker-icon-2x.png`,
