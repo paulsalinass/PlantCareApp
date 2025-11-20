@@ -30,13 +30,14 @@ public class ChatService(AppDbContext dbContext)
         return conversation;
     }
 
-    public async Task AddMessageAsync(int conversationId, MessageSender sender, string content)
+    public async Task AddMessageAsync(int conversationId, MessageSender sender, string content, string? attachmentPath = null)
     {
         var message = new ChatMessage
         {
             ConversationId = conversationId,
             Sender = sender,
             Content = content,
+            AttachmentPath = attachmentPath,
             CreatedAt = DateTime.UtcNow
         };
 

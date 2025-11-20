@@ -45,11 +45,11 @@ public class CareAutomationService
 
         if (weather is not null)
         {
-            if (weather.TemperatureC > 30)
+            if (weather.Current.TemperatureC > 30)
             {
                 insights.Add(new CareAutomationInsight("Calor intenso", "El clima actual es muy caluroso. Considera mover la planta a sombra parcial y vaporizar ligeramente.", "high", "bi bi-thermometer-high"));
             }
-            else if (weather.Humidity < 30 && plant.IsIndoors)
+            else if (weather.Current.Humidity < 30 && plant.IsIndoors)
             {
                 insights.Add(new CareAutomationInsight("Humedad baja", "El ambiente está seco. Usa bandejas con agua o humidificador.", "medium", "bi bi-moisture"));
             }

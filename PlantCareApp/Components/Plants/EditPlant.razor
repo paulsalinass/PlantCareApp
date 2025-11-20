@@ -8,6 +8,7 @@
 @inject IJSRuntime Js
 @inject LocationLookupService LocationLookupService
 @inject HomeZoneService HomeZoneService
+@using System.IO
 
 <h1 class="mb-4">Editar planta</h1>
 
@@ -291,8 +292,7 @@ else
             mapDotNetRef ??= DotNetObjectReference.Create(this);
             var lat = plant?.Latitude ?? -5.19;
             var lon = plant?.Longitude ?? -80.63;
-            await Js.InvokeVoidAsync("plantCareMap.init", mapElement, mapDotNetRef, lat, lon);
-            mapInitialized = true;
+            mapInitialized = await Js.InvokeAsync<bool>("plantCareMap.init", mapElement, mapDotNetRef, lat, lon);
             await LoadZonesAsync();
         }
     }
@@ -416,10 +416,11 @@ else
         }
 
         selectedFile = e.File;
-        using var stream = selectedFile.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
-        var buffer = new byte[Math.Min(selectedFile.Size, 400 * 1024)];
-        var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length));
-        previewImage = $"data:{selectedFile.ContentType};base64,{Convert.ToBase64String(buffer, 0, read)}";
+        var previewFile = await selectedFile.RequestImageFileAsync("image/png", 1280, 1280);
+        await using var previewStream = previewFile.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+        using var memory = new MemoryStream();
+        await previewStream.CopyToAsync(memory);
+        previewImage = $"data:image/png;base64,{Convert.ToBase64String(memory.ToArray())}";
     }
 
     private async Task HandleValidSubmit()
@@ -439,7 +440,7 @@ else
             }
 
             await PlantService.UpdatePlantAsync(plant);
-            Navigation.NavigateTo("/plants", true);
+            Navigation.NavigateTo("/plants");
         }
         catch (Exception ex)
         {

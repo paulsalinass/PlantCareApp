@@ -68,5 +68,12 @@
     "areaType": "Mixto",
     "notes": null,
     "createdAt": "2025-11-18T21:10:27.7492692Z"
+  },
+  {
+    "id": "dec3f063-0672-4fc3-ad1c-9f46066c3b80",
+    "name": "fgh",
+    "areaType": "Interior",
+    "notes": "fdg",
+    "createdAt": "2025-11-20T16:10:03.9699697Z"
   }
 ]

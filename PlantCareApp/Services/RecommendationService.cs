@@ -15,7 +15,7 @@ public class RecommendationService
             new("Revisión", "Observa hojas amarillas o manchas una vez por semana."),
         };
 
-        if (weather is not null && weather.TemperatureC > 28)
+        if (weather is not null && weather.Current.TemperatureC > 28)
         {
             items.Add(new("Protección solar", "Considera mover la planta a sombra parcial durante la tarde."));
         }

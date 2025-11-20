@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using PlantCareApp.Models;
 
@@ -34,7 +35,16 @@ public class HomeZoneService
         _filePath = Path.Combine(appData, "home-zones.json");
         if (!File.Exists(_filePath))
         {
-            File.WriteAllText(_filePath, "[]");
+            var seeded = _defaults.Select(d => new HomeZone
+            {
+                Id = Guid.NewGuid(),
+                Name = d.Name,
+                AreaType = d.AreaType,
+                Notes = d.Notes,
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
+            var payload = JsonSerializer.Serialize(seeded, SerializerOptions);
+            File.WriteAllText(_filePath, payload);
         }
     }
 
@@ -44,28 +54,6 @@ public class HomeZoneService
         try
         {
             var zones = await ReadAsync();
-            var changed = false;
-            foreach (var template in _defaults)
-            {
-                if (!zones.Any(z => string.Equals(z.Name, template.Name, StringComparison.OrdinalIgnoreCase)))
-                {
-                    zones.Add(new HomeZone
-                    {
-                        Id = Guid.NewGuid(),
-                        Name = template.Name,
-                        AreaType = template.AreaType,
-                        Notes = template.Notes,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                    changed = true;
-                }
-            }
-
-            if (changed)
-            {
-                await WriteAsync(zones);
-            }
-
             return zones.OrderBy(z => z.Name).ToList();
         }
         finally

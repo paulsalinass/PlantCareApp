@@ -19,7 +19,6 @@
 <div class="row g-3">
     @foreach (var zone in zones)
     {
-        var isDefault = defaultZoneNames.Contains(zone.Name);
         <div class="col-12 col-md-6 col-xl-4">
             <div class="home-zone-card">
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -30,23 +29,17 @@
                     <div class="d-flex gap-2">
                         <button class="btn btn-outline-secondary btn-sm"
                                 @onclick="@(() => Edit(zone))"
-                                disabled="@isDefault"
-                                title="@(isDefault ? "Ambiente base" : "Editar ambiente")">
+                                title="Editar ambiente">
                             <i class="bi bi-pencil"></i>
                         </button>
                         <button class="btn btn-outline-danger btn-sm"
                                 @onclick="@(() => ConfirmDelete(zone))"
-                                disabled="@isDefault"
-                                title="@(isDefault ? "No se puede eliminar" : "Eliminar ambiente")">
+                                title="Eliminar ambiente">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
                 </div>
                 <p class="text-muted mb-0">@(!string.IsNullOrWhiteSpace(zone.Notes) ? zone.Notes : "Sin notas.")</p>
-                @if (isDefault)
-                {
-                    <small class="text-muted d-block mt-2">Ambiente base incluido por defecto.</small>
-                }
             </div>
         </div>
     }
@@ -96,10 +89,6 @@
 
 @code {
     private readonly List<HomeZone> zones = new();
-    private readonly HashSet<string> defaultZoneNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Sala", "Comedor", "Cocina", "Dormitorio", "Estudio", "Patio", "Balcón", "Terraza", "Jardín", "Otro"
-    };
     private HomeZone? editingZone;
     private bool showForm;
     private bool isSaving;
@@ -131,11 +120,6 @@
 
     private void Edit(HomeZone zone)
     {
-        if (defaultZoneNames.Contains(zone.Name))
-        {
-            return;
-        }
-
         editingZone = new HomeZone
         {
             Id = zone.Id,
@@ -185,7 +169,7 @@
 
     private async Task ConfirmDelete(HomeZone zone)
     {
-        if (zone is null || defaultZoneNames.Contains(zone.Name)) return;
+        if (zone is null) return;
         try
         {
             await ZoneService.DeleteZoneAsync(zone.Id);

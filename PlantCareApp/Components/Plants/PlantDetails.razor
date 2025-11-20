@@ -78,7 +78,7 @@ else
                         <strong>Clima actual</strong>
                         @if (HasCoordinates)
                         {
-                            <span class="text-muted">@plant.Latitude:F2 / @plant.Longitude:F2</span>
+                            <span class="text-muted">@(plant.Latitude?.ToString("F2") ?? "--") / @(plant.Longitude?.ToString("F2") ?? "--")</span>
                         }
                     </div>
                     @if (!HasCoordinates)
@@ -97,13 +97,13 @@ else
                     {
                         <div class="d-flex align-items-center gap-4">
                             <div>
-                                <div class="climate-temp">@weather.TemperatureC °C</div>
-                                <small class="text-muted">@weather.Conditions</small>
+                                <div class="climate-temp">@weather.Current.TemperatureC &deg;C</div>
+                                <small class="text-muted">@weather.Current.Conditions</small>
                             </div>
                             <div class="text-muted small">
-                                <div>Humedad: <strong>@weather.Humidity %</strong></div>
-                                <div>Viento: <strong>@weather.WindSpeedKph km/h</strong></div>
-                                <div>Actualizado: @weather.RetrievedAt.ToLocalTime().ToShortTimeString()</div>
+                                <div>Humedad: <strong>@weather.Current.Humidity %</strong></div>
+                                <div>Viento: <strong>@weather.Current.WindSpeedKph km/h</strong></div>
+                                <div>Actualizado: @weather.Current.RetrievedAt.ToLocalTime().ToShortTimeString()</div>
                             </div>
                         </div>
                     }
@@ -113,13 +113,41 @@ else
 
         <div class="col-12 col-lg-7">
             <div class="detail-tabs">
-                <button class='@GetTabClass("care")' @onclick='() => ActivateTab("care")'>Cuidados</button>
-                <button class='@GetTabClass("requirements")' @onclick='() => ActivateTab("requirements")'>Requisitos</button>
-                <button class='@GetTabClass("info")' @onclick='() => ActivateTab("info")'>Información</button>
+                <button class='@GetTabClass("description")' @onclick='() => ActivateTab("description")'>Descripción</button>
+                <button class='@GetTabClass("care")' @onclick='() => ActivateTab("care")'>Cuidado</button>
                 <button class='@GetTabClass("history")' @onclick='() => ActivateTab("history")'>Historial</button>
             </div>
 
-            @if (activeTab == "care")
+            @if (activeTab == "description")
+            {
+                <div class="info-block">
+                    @foreach (var block in infoBlocks)
+                    {
+                        <div class="info-section">
+                            <h5>@block.Title</h5>
+                            <p>@block.Content</p>
+                        </div>
+                    }
+                </div>
+
+                <div class="row g-3 mt-3">
+                    @foreach (var req in requirements)
+                    {
+                        <div class="col-12 col-md-6">
+                            <div class="requirement-card">
+                                <div class="requirement-icon">
+                                    <i class="@req.Icon"></i>
+                                </div>
+                                <div>
+                                    <p class="fw-semibold mb-1">@req.Title</p>
+                                    <p class="text-muted mb-0">@req.Detail</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else if (activeTab == "care")
             {
                 <div class="row g-3">
                     @foreach (var tip in careTips)
@@ -132,25 +160,6 @@ else
                                 <div>
                                     <p class="fw-semibold mb-1">@tip.Title</p>
                                     <p class="text-muted mb-0">@tip.Description</p>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-            else if (activeTab == "requirements")
-            {
-                <div class="row g-3">
-                    @foreach (var req in requirements)
-                    {
-                        <div class="col-12 col-md-6">
-                            <div class="requirement-card">
-                                <div class="requirement-icon">
-                                    <i class="@req.Icon"></i>
-                                </div>
-                                <div>
-                                    <p class="fw-semibold mb-1">@req.Title</p>
-                                    <p class="text-muted mb-0">@req.Detail</p>
                                 </div>
                             </div>
                         </div>
@@ -283,18 +292,6 @@ else
                     }
                 </div>
             }
-            else
-            {
-                <div class="info-block">
-                    @foreach (var block in infoBlocks)
-                    {
-                        <div class="info-section">
-                            <h5>@block.Title</h5>
-                            <p>@block.Content</p>
-                        </div>
-                    }
-                </div>
-            }
         </div>
     </div>
 }
@@ -307,7 +304,7 @@ else
     private WeatherInfo? weather;
     private bool isLoading = true;
     private string? weatherError;
-    private string activeTab = "care";
+    private string activeTab = "description";
     private readonly List<CareTip> careTips = new();
     private readonly List<RequirementTip> requirements = new();
     private readonly List<InfoBlock> infoBlocks = new();
@@ -338,7 +335,10 @@ else
         {
             try
             {
-                weather = await WeatherService.GetCurrentWeatherAsync(plant!.Latitude!.Value, plant.Longitude!.Value);
+                weather = await WeatherService.GetCurrentWeatherAsync(
+                    plant!.Latitude!.Value,
+                    plant.Longitude!.Value,
+                    plant.LocationName ?? plant.Country ?? plant.Name);
             }
             catch (Exception ex)
             {
@@ -430,7 +430,7 @@ else
     {
         try
         {
-            return await WeatherService.GetCurrentWeatherAsync(lat, lon);
+            return await WeatherService.GetCurrentWeatherAsync(lat, lon, plant?.LocationName ?? plant?.Country ?? "Ubicacion");
         }
         catch
         {

@@ -1,58 +1,310 @@
 @page "/weather"
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 
+@using System.Linq
+@using System.Threading
 @inject WeatherService WeatherService
+@inject LocationLookupService LocationLookupService
+@inject IJSRuntime Js
 
-<h1 class="mb-4">Clima</h1>
-
-<EditForm Model="@request" OnValidSubmit="@ConsultAsync">
-    <div class="row g-3">
-        <div class="col-md-4">
-            <label class="form-label">Latitud</label>
-            <InputNumber TValue="double" class="form-control" @bind-Value="request.Latitude" />
-        </div>
-        <div class="col-md-4">
-            <label class="form-label">Longitud</label>
-            <InputNumber TValue="double" class="form-control" @bind-Value="request.Longitude" />
-        </div>
-        <div class="col-md-4 d-flex align-items-end">
-            <button class="btn btn-primary w-100" type="submit" disabled="@isLoading">
-                @(isLoading ? "Consultando..." : "Consultar")
-            </button>
-        </div>
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Clima inteligente</h1>
+        <p class="text-muted mb-0">Busca tu ciudad, toca el mapa o usa tu ubicacion actual para ver datos clave para tus plantas.</p>
     </div>
-</EditForm>
+    <button class="btn btn-outline-secondary" type="button" @onclick="UseCurrentLocationAsync" disabled="@isRequestingLocation">
+        <i class="bi bi-crosshair"></i> @(isRequestingLocation ? "Detectando..." : "Usar mi ubicacion")
+    </button>
+</div>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
-    <div class="alert alert-danger mt-3">@errorMessage</div>
+    <div class="alert alert-danger">@errorMessage</div>
 }
-else if (weather is not null)
+
+<div class="row g-4 align-items-stretch">
+    <div class="col-12 col-xl-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h5 class="card-title">Seleccion de ubicacion</h5>
+                <div class="mb-3">
+                    <label class="form-label">Buscar ciudad</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <InputText class="form-control" placeholder="Ej. Piura, Lima, Cusco" @bind-Value="locationSearch" />
+                        <button class="btn btn-outline-secondary" type="button" disabled="@isSearching" @onclick="SearchLocationAsync">
+                            @(isSearching ? "Buscando" : "Buscar")
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(locationSearchError))
+                    {
+                        <small class="text-danger">@locationSearchError</small>
+                    }
+                </div>
+
+                @if (searchResults.Count > 0)
+                {
+                    <div class="list-group weather-location-results mb-3">
+                        @foreach (var suggestion in searchResults)
+                        {
+                            <button type="button" class="list-group-item list-group-item-action" @onclick="() => ApplyLocation(suggestion)">
+                                <div class="fw-semibold">@suggestion.Name</div>
+                                <small class="text-muted">@FormatLocation(suggestion)</small>
+                            </button>
+                        }
+                    </div>
+                }
+
+                <div class="weather-location-meta mb-3">
+                    <p class="mb-1 text-muted">Seleccion actual:</p>
+                    <strong>@(selectedLocationLabel ?? "Sin seleccionar")</strong>
+                    <small class="d-block text-muted">@currentCoordinates</small>
+                </div>
+
+                <div class="map-picker weather-map" @ref="mapElement"></div>
+                <small class="text-muted d-block mt-2">Toca el mapa o mueve el marcador para actualizar las condiciones.</small>
+                @if (!string.IsNullOrEmpty(mapStatusMessage))
+                {
+                    <small class="text-danger d-block mt-1">@mapStatusMessage</small>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-8">
+        <div class="card shadow-sm border-0 weather-hero-card mb-3 h-100">
+            <div class="card-body">
+                @if (isLoading)
+                {
+                    <p class="mb-0 text-muted">Cargando condiciones...</p>
+                }
+                else if (weather is null)
+                {
+                    <p class="mb-0 text-muted">Selecciona una ubicacion para ver el clima.</p>
+                }
+                else
+                {
+                    <div class="weather-hero">
+                        <div>
+                            <p class="text-muted mb-1">@weather.LocationLabel</p>
+                            <div class="d-flex align-items-baseline gap-2">
+                                <h1 class="display-4 mb-0">@weather.Current.TemperatureC.ToString("F1")&deg;C</h1>
+                                <span class="text-muted">Sensacion @weather.Current.FeelsLikeC.ToString("F1")&deg;C</span>
+                            </div>
+                            <p class="lead mb-1">@weather.Current.Conditions</p>
+                            <small class="text-muted">Actualizado @weather.Current.RetrievedAt.ToLocalTime():t</small>
+                        </div>
+                        <div class="weather-hero-side">
+                            <div class="moon-phase">
+                                <span class="moon-label">Fase lunar</span>
+                                <strong>@GetMoonPhaseLabel(weather.Current.MoonPhase)</strong>
+                            </div>
+                            <div class="sunrise-card">
+                                <div>
+                                    <small class="text-muted">Amanecer</small>
+                                    <div>@FormatTime(weather.Current.Sunrise)</div>
+                                </div>
+                                <div>
+                                    <small class="text-muted">Atardecer</small>
+                                    <div>@FormatTime(weather.Current.Sunset)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="weather-stat-grid mt-4">
+                        <div class="stat-tile">
+                            <span>Humedad</span>
+                            <strong>@weather.Current.Humidity %</strong>
+                        </div>
+                        <div class="stat-tile">
+                            <span>Viento</span>
+                            <strong>@weather.Current.WindSpeedKph km/h</strong>
+                        </div>
+                        <div class="stat-tile">
+                            <span>Presion</span>
+                            <strong>@weather.Current.PressureHpa hPa</strong>
+                        </div>
+                        <div class="stat-tile">
+                            <span>Nubosidad</span>
+                            <strong>@weather.Current.CloudCoverPct %</strong>
+                        </div>
+                        <div class="stat-tile">
+                            <span>Precipitacion</span>
+                            <strong>@weather.Current.PrecipitationMm mm</strong>
+                        </div>
+                        <div class="stat-tile">
+                            <span>Indice UV</span>
+                            <strong>@weather.Current.UvIndex</strong>
+                        </div>
+                        <div class="stat-tile">
+                            <span>Punto de rocio</span>
+                            <strong>@weather.Current.DewPointC&deg;C</strong>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (weather?.Daily.Count > 0)
 {
     <div class="card shadow-sm border-0 mt-4">
         <div class="card-body">
-            <h5 class="card-title">Condiciones actuales</h5>
-            <p class="display-6">@weather.TemperatureC °C</p>
-            <p class="mb-0">Humedad: @weather.Humidity %</p>
-            <p class="mb-0">Condiciones: @weather.Conditions</p>
-            <p class="text-muted mb-0"><small>Actualizado: @weather.RetrievedAt.ToLocalTime()</small></p>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Pronostico proximo 5 dias</h5>
+                <small class="text-muted">Datos por Open-Meteo</small>
+            </div>
+            <div class="forecast-grid">
+                @foreach (var day in weather.Daily.Take(5))
+                {
+                    <div class="forecast-pill">
+                        <strong>@day.Date.ToLocalTime():ddd</strong>
+                        <span class="text-muted">@day.Date:dd MMM</span>
+                        <p class="mb-1">@day.Conditions</p>
+                        <div class="d-flex justify-content-between small">
+                            <span>@day.MaxTempC.ToString("F0")&deg;C</span>
+                            <span class="text-muted">@day.MinTempC.ToString("F0")&deg;C</span>
+                        </div>
+                        <small>Prob. lluvia: @day.PrecipitationChance %</small>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 }
 
 @code {
-    private readonly WeatherRequest request = new() { Latitude = -5.19, Longitude = -80.63 };
     private WeatherInfo? weather;
-    private string? errorMessage;
     private bool isLoading;
+    private string? errorMessage;
+    private string? locationSearch;
+    private string? locationSearchError;
+    private bool isSearching;
+    private bool isRequestingLocation;
+    private readonly List<LocationSuggestion> searchResults = new();
+    private string? selectedLocationLabel;
+    private string currentCoordinates = "Lat -5.19, Lon -80.63";
+    private ElementReference mapElement;
+    private DotNetObjectReference<Weather>? mapRef;
+    private bool mapInitialized;
+    private bool mapReady;
+    private double currentLat = -5.19;
+    private double currentLon = -80.63;
+    private CancellationTokenSource? refreshDebounce;
+    private string? mapStatusMessage;
 
-    private async Task ConsultAsync()
+    protected override async Task OnInitializedAsync()
+    {
+        selectedLocationLabel = "Piura, Peru";
+        await LoadWeatherAsync(currentLat, currentLon, selectedLocationLabel);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            mapRef = DotNetObjectReference.Create(this);
+            mapReady = await Js.InvokeAsync<bool>("plantCareMap.init", mapElement, mapRef, currentLat, currentLon);
+            mapInitialized = true;
+            mapStatusMessage = mapReady ? null : "No pudimos cargar el mapa (¿sin conexión a internet?).";
+        }
+    }
+
+    private async Task SearchLocationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(locationSearch))
+        {
+            locationSearchError = "Ingresa un lugar a buscar.";
+            searchResults.Clear();
+            return;
+        }
+
+        try
+        {
+            isSearching = true;
+            locationSearchError = null;
+            searchResults.Clear();
+            var matches = await LocationLookupService.SearchAsync(locationSearch.Trim());
+            if (matches.Count == 0)
+            {
+                locationSearchError = "No encontramos coincidencias.";
+            }
+            else
+            {
+                searchResults.AddRange(matches);
+            }
+        }
+        catch (Exception ex)
+        {
+            locationSearchError = ex.Message;
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task ApplyLocation(LocationSuggestion suggestion)
+    {
+        selectedLocationLabel = FormatLocation(suggestion);
+        locationSearch = suggestion.Name;
+        searchResults.Clear();
+        await LoadWeatherAsync(suggestion.Latitude, suggestion.Longitude, selectedLocationLabel);
+    }
+
+    private string FormatLocation(LocationSuggestion suggestion)
+    {
+        var bits = new[] { suggestion.Name, suggestion.Country }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        return string.Join(", ", bits);
+    }
+
+    private async Task UseCurrentLocationAsync()
+    {
+        if (isRequestingLocation)
+        {
+            return;
+        }
+
+        try
+        {
+            isRequestingLocation = true;
+            var coords = await Js.InvokeAsync<GeoResult>("plantCare.getCurrentPosition");
+            var reverse = await LocationLookupService.ReverseLookupAsync(coords.Latitude, coords.Longitude);
+            selectedLocationLabel = reverse is null ? "Mis coordenadas" : FormatLocation(reverse);
+            await LoadWeatherAsync(coords.Latitude, coords.Longitude, selectedLocationLabel);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isRequestingLocation = false;
+        }
+    }
+
+    private async Task LoadWeatherAsync(double latitude, double longitude, string? label)
     {
         try
         {
             isLoading = true;
             errorMessage = null;
-            weather = await WeatherService.GetCurrentWeatherAsync(request.Latitude, request.Longitude);
+            weather = await WeatherService.GetCurrentWeatherAsync(latitude, longitude, label);
+            currentLat = latitude;
+            currentLon = longitude;
+            currentCoordinates = $"Lat {latitude:F2}, Lon {longitude:F2}";
+            if (!string.IsNullOrWhiteSpace(label))
+            {
+                selectedLocationLabel = label;
+            }
+            if (mapInitialized && mapReady)
+            {
+                await Js.InvokeVoidAsync("plantCareMap.update", mapElement, latitude, longitude);
+            }
         }
         catch (Exception ex)
         {
@@ -61,12 +313,59 @@ else if (weather is not null)
         finally
         {
             isLoading = false;
+            StateHasChanged();
         }
     }
 
-    private class WeatherRequest
+    [JSInvokable]
+    public Task OnMapLocationChanged(double latitude, double longitude)
     {
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        ScheduleMapRefresh(latitude, longitude);
+        return Task.CompletedTask;
     }
+
+    private void ScheduleMapRefresh(double latitude, double longitude)
+    {
+        refreshDebounce?.Cancel();
+        var cts = new CancellationTokenSource();
+        refreshDebounce = cts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(600, cts.Token);
+                await InvokeAsync(async () => await LoadWeatherAsync(latitude, longitude, "Marcador manual"));
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        });
+    }
+
+    private static string GetMoonPhaseLabel(double value)
+    {
+        if (value < 0.1) return "Luna nueva";
+        if (value < 0.25) return "Creciente";
+        if (value < 0.5) return "Cuarto creciente";
+        if (value < 0.6) return "Gibosa creciente";
+        if (value < 0.75) return "Luna llena";
+        if (value < 0.9) return "Gibosa menguante";
+        if (value < 1.0) return "Cuarto menguante";
+        return "Luna nueva";
+    }
+
+    private string FormatTime(DateTime value) =>
+        value == DateTime.MinValue ? "--" : value.ToLocalTime().ToString("t");
+
+    public async ValueTask DisposeAsync()
+    {
+        refreshDebounce?.Cancel();
+        if (mapInitialized)
+        {
+            await Js.InvokeVoidAsync("plantCareMap.dispose", mapElement);
+        }
+        mapRef?.Dispose();
+    }
+
+    private record GeoResult(double Latitude, double Longitude, double Accuracy);
 }

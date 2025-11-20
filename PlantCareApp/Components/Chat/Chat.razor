@@ -1,74 +1,214 @@
 @page "/chat"
 @rendermode InteractiveServer
 
+@using System.Text
+@using System.IO
+@using Microsoft.AspNetCore.Components.Forms
 @inject ChatService ChatService
 @inject PlantService PlantService
+@inject RecommendationService RecommendationService
+@inject PhotoAnalysisService PhotoAnalysisService
+@inject WeatherService WeatherService
+@inject ImageStorageService ImageStorageService
+@inject IJSRuntime Js
 
-<h1 class="mb-4">Chat IA (prototipo)</h1>
-
-<EditForm Model="@chatRequest" OnValidSubmit="@SendMessageAsync">
-    <div class="row g-3 align-items-end mb-3">
-        <div class="col-md-4">
-            <label class="form-label">Planta</label>
-            <InputNumber class="form-control" @bind-Value="chatRequest.PlantId" />
-            <div class="form-text">Ingresa el ID de la planta (por ahora).</div>
-        </div>
-        <div class="col-md-8">
-            <label class="form-label">Mensaje</label>
-            <InputTextArea class="form-control" @bind-Value="chatRequest.Message" rows="3" />
-        </div>
+<div class="today-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+        <h1 class="mb-1 fw-semibold">Asistente IA</h1>
+        <p class="text-muted mb-0">Consulta libremente, incluso si a?n no registraste plantas.</p>
     </div>
-    <button class="btn btn-primary" type="submit" disabled="@isSending">@(isSending ? "Enviando..." : "Enviar")</button>
-</EditForm>
+</div>
 
-@if (!string.IsNullOrEmpty(formError))
+@if (isLoadingPlants)
 {
-    <div class="alert alert-danger mt-3">@formError</div>
+    <p>Cargando datos...</p>
 }
-
-@if (conversation is not null)
+else
 {
-    <div class="card shadow-sm border-0 mt-4">
-        <div class="card-body">
-            <h5 class="card-title">@conversation.Title</h5>
-            @foreach (var message in conversation.Messages.OrderBy(m => m.CreatedAt))
-            {
-                <div class="chat-bubble @(message.Sender == MessageSender.Assistant ? "assistant" : "user") mb-3">
-                    <strong>@(message.Sender == MessageSender.Assistant ? "Asistente" : "Tú"):</strong>
-                    <p class="mb-0">@message.Content</p>
+    @if (!plantOptions.Any())
+    {
+        <div class="alert alert-info">No hay plantas registradas. Puedes conversar en modo general y luego asociar las respuestas a una planta cuando la crees.</div>
+    }
+
+    @if (!string.IsNullOrEmpty(formError))
+    {
+        <div class="alert alert-danger">@formError</div>
+    }
+
+    <div class="row g-4 chat-layout">
+        <div class="col-12 col-xl-7">
+            <div class="card shadow-sm border-0 chat-panel h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <p class="mb-0 text-muted">Conversaci?n</p>
+                            <strong>@currentConversationLabel</strong>
+                        </div>
+                        <small class="text-muted">@DisplayedMessages.Count mensaje(s)</small>
+                    </div>
+
+                    <div class="chat-history" @ref="historyPanel">
+                        @if (DisplayedMessages.Count == 0)
+                        {
+                            <div class="text-center text-muted py-5">
+                                <p class="mb-0">Escribe tu primera consulta para comenzar.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var message in DisplayedMessages)
+                            {
+                                var isAssistant = message.Sender == MessageSender.Assistant;
+                                <div class="chat-bubble @(isAssistant ? "assistant" : "user")">
+                                    <div class="chat-meta">
+                                        <strong>@(isAssistant ? "PlantCare IA" : "T?")</strong>
+                                        <small>@message.CreatedAt.ToLocalTime():g</small>
+                                    </div>
+                                    <p>@message.Content</p>
+                                    @if (!string.IsNullOrEmpty(message.AttachmentPath))
+                                    {
+                                        <img src="@message.AttachmentPath" alt="Adjunto" class="chat-attachment" />
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
                 </div>
-            }
+            </div>
         </div>
-    </div>
-}
-else if (messages.Count > 0)
-{
-    <div class="card shadow-sm border-0 mt-4">
-        <div class="card-body">
-            @foreach (var message in messages)
-            {
-                <div class="chat-bubble @(message.Sender == MessageSender.Assistant ? "assistant" : "user") mb-3">
-                    <strong>@(message.Sender == MessageSender.Assistant ? "Asistente" : "Tú"):</strong>
-                    <p class="mb-0">@message.Content</p>
+
+        <div class="col-12 col-xl-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <EditForm Model="chatRequest" OnValidSubmit="SendMessageAsync">
+                        <div class="mb-3">
+                            <label class="form-label">Planta (opcional)</label>
+                            <InputSelect class="form-select" @bind-Value="SelectedPlantId">
+                                <option value="0">Chat general</option>
+                                @foreach (var plant in plantOptions)
+                                {
+                                    <option value="@plant.Id">@plant.Name (@plant.Species)</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Mensaje</label>
+                            <InputTextArea class="form-control" rows="4" placeholder="Describe s?ntomas, dudas o cuidados" @bind-Value="chatRequest.Message" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Adjuntar foto</label>
+                            <InputFile OnChange="OnPhotoSelected" accept="image/*" />
+                            @if (!string.IsNullOrEmpty(uploadError))
+                            {
+                                <small class="text-danger d-block mt-1">@uploadError</small>
+                            }
+                            @if (!string.IsNullOrEmpty(photoPreview))
+                            {
+                                <div class="attached-photo mt-2">
+                                    <img src="@photoPreview" alt="Adjunto" class="img-fluid rounded" />
+                                    <button type="button" class="btn btn-link text-danger p-0" @onclick="ClearAttachment">Quitar</button>
+                                </div>
+                            }
+                        </div>
+
+                        <button class="btn btn-success w-100" type="submit" disabled="@isSending">
+                            @(isSending ? "Enviando..." : "Enviar a la IA")
+                        </button>
+                        <small class="text-muted d-block mt-2">Si seleccionas una planta incluiremos clima y recomendaciones espec?ficas.</small>
+                    </EditForm>
                 </div>
-            }
+            </div>
         </div>
     </div>
 }
 
 @code {
     private readonly ChatRequest chatRequest = new();
+    private readonly List<Plant> plantOptions = new();
+    private readonly List<ChatMessage> generalMessages = new();
     private PlantConversation? conversation;
-    private readonly List<ChatMessage> messages = new();
-    private string? formError;
+    private bool isLoadingPlants = true;
     private bool isSending;
+    private string? formError;
+    private IBrowserFile? attachedPhoto;
+    private string? photoPreview;
+    private string? uploadError;
+    private ElementReference historyPanel;
+
+    private int SelectedPlantId
+    {
+        get => chatRequest.PlantId;
+        set
+        {
+            if (chatRequest.PlantId == value)
+            {
+                return;
+            }
+
+            chatRequest.PlantId = value;
+            if (value > 0)
+            {
+                _ = InvokeAsync(async () => await LoadConversationAsync(value));
+            }
+            else
+            {
+                conversation = null;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private IReadOnlyList<ChatMessage> DisplayedMessages => chatRequest.PlantId > 0
+        ? (conversation?.Messages?.OrderBy(m => m.CreatedAt).ToList() ?? new List<ChatMessage>())
+        : generalMessages;
+
+    private string currentConversationLabel => chatRequest.PlantId > 0
+        ? plantOptions.FirstOrDefault(p => p.Id == chatRequest.PlantId)?.Name ?? "Planta desconocida"
+        : "Chat general";
+
+    protected override async Task OnInitializedAsync()
+    {
+        plantOptions.AddRange(await PlantService.GetPlantsAsync());
+        SelectedPlantId = plantOptions.FirstOrDefault()?.Id ?? 0;
+        if (SelectedPlantId > 0)
+        {
+            await LoadConversationAsync(SelectedPlantId);
+        }
+        isLoadingPlants = false;
+    }
+
+    private async Task LoadConversationAsync(int plantId)
+    {
+        if (plantId <= 0)
+        {
+            conversation = null;
+            return;
+        }
+
+        conversation = await ChatService.GetOrCreateConversationAsync(plantId);
+        StateHasChanged();
+        await ScrollToBottomAsync();
+    }
 
     private async Task SendMessageAsync()
     {
-        if (chatRequest.PlantId <= 0 || string.IsNullOrWhiteSpace(chatRequest.Message))
+        if (string.IsNullOrWhiteSpace(chatRequest.Message) && attachedPhoto is null)
         {
-            formError = "Debes indicar la planta y un mensaje.";
+            formError = "Escribe un mensaje o adjunta una foto.";
             return;
+        }
+
+        Plant? plant = null;
+        if (chatRequest.PlantId > 0)
+        {
+            plant = plantOptions.FirstOrDefault(p => p.Id == chatRequest.PlantId);
+            if (plant is null)
+            {
+                formError = "No encontramos la planta seleccionada.";
+                return;
+            }
         }
 
         try
@@ -76,15 +216,28 @@ else if (messages.Count > 0)
             isSending = true;
             formError = null;
 
-            conversation = await ChatService.GetOrCreateConversationAsync(chatRequest.PlantId);
-            await ChatService.AddMessageAsync(conversation.Id, MessageSender.User, chatRequest.Message.Trim());
+            var attachmentPath = await SaveAttachmentAsync();
+            var content = string.IsNullOrWhiteSpace(chatRequest.Message) ? "Envi? una foto para analizar." : chatRequest.Message.Trim();
 
-            // Respuesta simulada
-            await ChatService.AddMessageAsync(conversation.Id, MessageSender.Assistant,
-                "Respuesta simulada de IA. Aquí aparecerán recomendaciones personalizadas.");
+            if (plant is null)
+            {
+                var created = DateTime.UtcNow;
+                generalMessages.Add(new ChatMessage { Sender = MessageSender.User, Content = content, AttachmentPath = attachmentPath, CreatedAt = created });
+                var reply = await BuildAssistantReplyAsync(null, chatRequest.Message, attachmentPath);
+                generalMessages.Add(new ChatMessage { Sender = MessageSender.Assistant, Content = reply, CreatedAt = created.AddSeconds(1) });
+            }
+            else
+            {
+                conversation ??= await ChatService.GetOrCreateConversationAsync(plant.Id);
+                await ChatService.AddMessageAsync(conversation.Id, MessageSender.User, content, attachmentPath);
+                var assistantReply = await BuildAssistantReplyAsync(plant, chatRequest.Message, attachmentPath);
+                await ChatService.AddMessageAsync(conversation.Id, MessageSender.Assistant, assistantReply);
+                conversation = await ChatService.GetOrCreateConversationAsync(plant.Id);
+            }
 
-            conversation = await ChatService.GetOrCreateConversationAsync(chatRequest.PlantId);
             chatRequest.Message = string.Empty;
+            ClearAttachment();
+            await ScrollToBottomAsync();
         }
         catch (Exception ex)
         {
@@ -94,6 +247,121 @@ else if (messages.Count > 0)
         {
             isSending = false;
         }
+    }
+
+    private async Task<string> BuildAssistantReplyAsync(Plant? plant, string? prompt, string? attachmentPath)
+    {
+        var sb = new StringBuilder();
+        if (plant is not null)
+        {
+            sb.AppendLine($"Analicemos {plant.Name} ({plant.Species ?? "sin especie"}).");
+        }
+        else
+        {
+            sb.AppendLine("Analicemos tu consulta general sobre plantas.");
+        }
+
+        WeatherInfo? weather = null;
+        if (plant?.Latitude is not null && plant.Longitude is not null)
+        {
+            try
+            {
+                weather = await WeatherService.GetCurrentWeatherAsync(plant.Latitude.Value, plant.Longitude.Value, plant.LocationName ?? "Clima local");
+            }
+            catch { }
+        }
+
+        if (weather is not null)
+        {
+            sb.AppendLine($"En {weather.LocationLabel} hay {weather.Current.TemperatureC:F1} C y {weather.Current.Humidity}% de humedad.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            sb.AppendLine($"Mensaje recibido: {prompt.Trim()}");
+        }
+
+        if (attachmentPath is not null)
+        {
+            var photo = new PlantPhoto { FilePath = attachmentPath, AnalysisSummary = string.Empty };
+            var analysis = await PhotoAnalysisService.AnalyzePhotoAsync(photo);
+            if (!string.IsNullOrWhiteSpace(analysis.AnalysisSummary))
+            {
+                sb.AppendLine($"An?lisis de la foto: {analysis.AnalysisSummary}");
+            }
+        }
+
+        if (plant is not null)
+        {
+            var recommendations = RecommendationService.GetRecommendations(plant, weather).Take(3);
+            sb.AppendLine("Acciones sugeridas:");
+            foreach (var rec in recommendations)
+            {
+                sb.AppendLine($"- {rec.Title}: {rec.Description}");
+            }
+        }
+        else
+        {
+            sb.AppendLine("Consejo general: mant?n un control del riego, revisa hojas amarillas y ajusta la luz poco a poco.");
+        }
+
+        sb.AppendLine("Si necesitas algo m?s, dime!");
+        return sb.ToString().Trim();
+    }
+
+    private async Task<string?> SaveAttachmentAsync()
+    {
+        if (attachedPhoto is null)
+        {
+            return null;
+        }
+
+        return await ImageStorageService.SavePlantImageAsync(attachedPhoto);
+    }
+
+    private async Task OnPhotoSelected(InputFileChangeEventArgs args)
+    {
+        attachedPhoto = null;
+        photoPreview = null;
+        uploadError = null;
+        var file = args.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            attachedPhoto = file;
+            var previewFile = await file.RequestImageFileAsync("image/png", 1024, 1024);
+            await using var stream = previewFile.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            photoPreview = $"data:image/png;base64,{Convert.ToBase64String(memory.ToArray())}";
+        }
+        catch (Exception ex)
+        {
+            uploadError = ex.Message;
+            attachedPhoto = null;
+            photoPreview = null;
+        }
+    }
+
+    private void ClearAttachment()
+    {
+        attachedPhoto = null;
+        photoPreview = null;
+        uploadError = null;
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        if (historyPanel.Context is null)
+        {
+            return;
+        }
+
+        await Js.InvokeVoidAsync("plantCare.scrollToBottom", historyPanel);
     }
 
     private class ChatRequest

@@ -34,6 +34,14 @@ window.plantCare = (function () {
                     (error) => reject(error),
                     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
             });
+        },
+        scrollToBottom: (element) => {
+            if (!element) {
+                return;
+            }
+            requestAnimationFrame(() => {
+                element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
+            });
         }
     };
 })();
@@ -43,7 +51,18 @@ window.plantCareMap = (function () {
 
     function init(element, dotNetRef, lat, lon) {
         if (!element || !window.L) {
-            return;
+            return false;
+        }
+
+        try {
+            const iconPath = "lib/leaflet/images/";
+            L.Icon.Default.mergeOptions({
+                iconUrl: `${iconPath}marker-icon.png`,
+                iconRetinaUrl: `${iconPath}marker-icon-2x.png`,
+                shadowUrl: `${iconPath}marker-shadow.png`
+            });
+        } catch {
+            // ignore icon errors
         }
 
         const center = [lat ?? 0, lon ?? 0];
@@ -67,6 +86,7 @@ window.plantCareMap = (function () {
 
         setTimeout(() => map.invalidateSize(), 200);
         instances.set(element, { map, marker });
+        return true;
     }
 
     function update(element, lat, lon) {

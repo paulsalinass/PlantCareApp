@@ -2,16 +2,45 @@
 @rendermode InteractiveServer
 
 @inject PlantService PlantService
+@inject HomeZoneService HomeZoneService
 
-<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
-    <div>
-        <h1 class="mb-1">Mis plantas</h1>
-        <p class="text-muted mb-0">Gestiona tus plantas, fotos y recordatorios.</p>
+<section class="plant-dashboard">
+    <div class="plant-hero-card">
+        <div>
+            <p class="eyebrow text-muted mb-1">Mis espacios</p>
+            <h1 class="mb-2">Cuida tus plantas</h1>
+            <p class="text-muted mb-0">Organiza por ambientes y cambia la vista entre tarjetas o slider como Plantin.</p>
+        </div>
+        <NavLink class="btn btn-pill btn-primary" href="/plants/add">
+            <i class="bi bi-plus-circle me-2"></i> Agregar planta
+        </NavLink>
     </div>
-    <NavLink class="btn btn-success btn-lg" href="/plants/add">
-        <i class="bi bi-plus-circle me-2"></i> Agregar planta
-    </NavLink>
-</div>
+
+    <div class="zone-chip-bar">
+        <button class="zone-chip @(SelectedZone is null ? "active" : null)" @onclick="() => SelectZone(null)">Todos</button>
+        @foreach (var zone in zoneOptions)
+        {
+            <button class="zone-chip @(SelectedZone == zone.Name ? "active" : null)" @onclick="() => SelectZone(zone.Name)">
+                @zone.Name
+                <small>@GetPlantCount(zone.Name)</small>
+            </button>
+        }
+    </div>
+
+    <div class="view-toggle-wrapper">
+        <small class="text-muted">Vista</small>
+        <div class="btn-group-sm btn-group view-toggle">
+            <button class="btn @(currentView == ViewMode.Grid ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => SetView(ViewMode.Grid)">
+                <i class="bi bi-grid"></i>
+            </button>
+            <button class="btn @(currentView == ViewMode.Carousel ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => SetView(ViewMode.Carousel)">
+                <i class="bi bi-layout-sidebar-inset"></i>
+            </button>
+        </div>
+    </div>
+</section>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -21,80 +50,99 @@ else if (isLoading)
 {
     <p>Cargando...</p>
 }
-else if (!plants.Any())
+else if (!FilteredPlants.Any())
 {
     <div class="alert alert-info">
-        @if (string.IsNullOrWhiteSpace(Zone))
-        {
-            <text>Aún no tienes plantas registradas.</text>
-        }
-        else
-        {
-            <span>No encontramos plantas en el ambiente <strong>@Zone</strong>. </span>
-            <NavLink class="btn btn-link btn-sm" href="/plants">Mostrar todas</NavLink>
-        }
+        No encontramos plantas para el ambiente seleccionado.
     </div>
 }
 else
 {
-    <div class="row g-4">
-        @foreach (var plant in plants)
-        {
-            <div class="col-12 col-md-6 col-xl-4">
-                <div class="card plant-card h-100">
-                    <img src="@GetPhotoUrl(plant)"
-                         class="card-img-top"
-                         alt="@plant.Name"
-                         style="height: 220px; object-fit: cover;" />
-                    <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5 class="card-title mb-0">@plant.Name</h5>
-                            <span class="badge bg-@(plant.IsIndoors ? "success" : "info")">
+    if (currentView == ViewMode.Grid)
+    {
+        <div class="plant-grid">
+            @foreach (var plant in FilteredPlants)
+            {
+                <div class="plant-card-modern">
+                    <img src="@GetPhotoUrl(plant)" alt="@plant.Name" />
+                    <div class="plant-card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="plant-name mb-0">@plant.Name</p>
+                                <small class="text-muted">@plant.Species</small>
+                            </div>
+                            <span class="plant-badge @(plant.IsIndoors ? "indoors" : "outdoors")">
                                 @(plant.IsIndoors ? "Interior" : "Exterior")
                             </span>
                         </div>
-                        <p class="text-muted mb-2">@plant.Species</p>
-
-                        <div class="small text-muted mb-3">
-                            @GetNextWateringText(plant)
-                        </div>
-
-                        <div class="mt-auto d-flex flex-column gap-2">
-                            <NavLink class="btn btn-outline-secondary btn-sm" href="@GetDetailsUrl(plant.Id)">
-                                <i class="bi bi-eye me-1"></i> Ver ficha
+                        <p class="next-water">@GetNextWateringText(plant)</p>
+                        <div class="plant-card-actions">
+                            <NavLink href="@GetDetailsUrl(plant.Id)" class="ghost-btn">
+                                Ver ficha
                             </NavLink>
-                            <div class="d-flex gap-2">
-                                <NavLink class="btn btn-outline-success btn-sm flex-fill" href="@GetEditUrl(plant.Id)">
-                                    <i class="bi bi-pencil me-1"></i> Editar
+                            <div class="icon-pill-group">
+                                <NavLink href="@GetEditUrl(plant.Id)" class="icon-pill">
+                                    <i class="bi bi-pencil"></i>
                                 </NavLink>
-                                <NavLink class="btn btn-outline-danger btn-sm flex-fill" href="@GetDeleteUrl(plant.Id)">
-                                    <i class="bi bi-trash me-1"></i> Eliminar
+                                <NavLink href="@GetDeleteUrl(plant.Id)" class="icon-pill danger">
+                                    <i class="bi bi-trash"></i>
                                 </NavLink>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        }
-    </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="plant-carousel">
+            @foreach (var plant in FilteredPlants)
+            {
+                <div class="carousel-card">
+                    <img src="@GetPhotoUrl(plant)" alt="@plant.Name" />
+                    <div class="carousel-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <p class="plant-name mb-0">@plant.Name</p>
+                                <small class="text-muted">@plant.Species</small>
+                            </div>
+                            <span class="plant-badge @(plant.IsIndoors ? "indoors" : "outdoors")">
+                                @(plant.IsIndoors ? "Interior" : "Exterior")
+                            </span>
+                        </div>
+                        <p class="next-water">@GetNextWateringText(plant)</p>
+                        <div class="carousel-actions">
+                            <NavLink href="@GetDetailsUrl(plant.Id)" class="btn btn-pill btn-primary">Abrir ficha</NavLink>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 }
 
 @code {
+    private enum ViewMode { Grid, Carousel }
+
     [SupplyParameterFromQuery] public string? Zone { get; set; }
     private readonly List<Plant> plants = new();
+    private readonly List<HomeZone> zoneOptions = new();
     private bool isLoading = true;
     private string? errorMessage;
+    private string? SelectedZone;
+    private ViewMode currentView = ViewMode.Grid;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            plants.Clear();
             plants.AddRange(await PlantService.GetPlantsAsync());
+            zoneOptions.AddRange(await HomeZoneService.GetZonesAsync());
 
             if (!string.IsNullOrWhiteSpace(Zone))
             {
-                plants.RemoveAll(p => !string.Equals(p.LocationArea, Zone, StringComparison.OrdinalIgnoreCase));
+                SelectedZone = Zone;
             }
         }
         catch (Exception ex)
@@ -107,18 +155,30 @@ else
         }
     }
 
+    private IEnumerable<Plant> FilteredPlants =>
+        string.IsNullOrWhiteSpace(SelectedZone)
+            ? plants
+            : plants.Where(p => string.Equals(p.LocationArea, SelectedZone, StringComparison.OrdinalIgnoreCase));
+
+    private void SelectZone(string? zone) => SelectedZone = zone;
+
+    private void SetView(ViewMode mode) => currentView = mode;
+
+    private int GetPlantCount(string zone) =>
+        plants.Count(p => string.Equals(p.LocationArea, zone, StringComparison.OrdinalIgnoreCase));
+
     private static string GetNextWateringText(Plant plant)
     {
         var next = plant.NextWateringDate;
         if (next is null)
         {
-            return "Aun no hay recordatorios configurados.";
+            return "Aún no hay recordatorios configurados.";
         }
 
         var diff = (next.Value.Date - DateTime.Today).Days;
         if (diff < 0)
         {
-            return $"ALERTA: atrasado {Math.Abs(diff)} dia(s)";
+            return $"Atrasado {Math.Abs(diff)} día(s)";
         }
 
         if (diff == 0)
@@ -126,7 +186,7 @@ else
             return "Hoy toca regar";
         }
 
-        return $"Proximo riego en {diff} dia(s)";
+        return $"Riego en {diff} día(s)";
     }
 
     private static string GetPhotoUrl(Plant plant)
