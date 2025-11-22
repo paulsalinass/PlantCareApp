@@ -5,26 +5,27 @@
 @inject HomeZoneService HomeZoneService
 
 <section class="plant-dashboard">
-    <div class="plant-hero-card">
-        <div>
-            <p class="eyebrow text-muted mb-1">Mis espacios</p>
-            <h1 class="mb-2">Cuida tus plantas</h1>
-            <p class="text-muted mb-0">Organiza por ambientes y cambia la vista entre tarjetas o slider como Plantin.</p>
-        </div>
-        <NavLink class="btn btn-pill btn-primary" href="/plants/add">
-            <i class="bi bi-plus-circle me-2"></i> Agregar planta
-        </NavLink>
-    </div>
-
-    <div class="zone-chip-bar">
-        <button class="zone-chip @(SelectedZone is null ? "active" : null)" @onclick="() => SelectZone(null)">Todos</button>
-        @foreach (var zone in zoneOptions)
-        {
-            <button class="zone-chip @(SelectedZone == zone.Name ? "active" : null)" @onclick="() => SelectZone(zone.Name)">
-                @zone.Name
-                <small>@GetPlantCount(zone.Name)</small>
+    <div class="zone-slider">
+        <div class="zone-chip-bar">
+            <button class="zone-chip @(SelectedZone is null ? "active" : null)" @onclick="() => SelectZone(null)">
+                <span class="chip-badge">@plants.Count</span>
+                <div class="zone-chip-inner">
+                    <span class="zone-chip-icon"><i class="bi bi-collection"></i></span>
+                    <span class="zone-chip-label">Todos</span>
+                </div>
             </button>
-        }
+            @foreach (var zone in FilteredZones)
+            {
+                var count = GetPlantCount(zone.Name);
+                <button class="zone-chip @(SelectedZone == zone.Name ? "active" : null)" @onclick="() => SelectZone(zone.Name)">
+                    <span class="chip-badge">@count</span>
+                    <div class="zone-chip-inner">
+                        <span class="zone-chip-icon"><i class="@GetZoneIcon(zone.Name)"></i></span>
+                        <span class="zone-chip-label">@zone.Name</span>
+                    </div>
+                </button>
+            }
+        </div>
     </div>
 
     <div class="view-toggle-wrapper">
@@ -63,19 +64,25 @@ else
         <div class="plant-grid">
             @foreach (var plant in FilteredPlants)
             {
+                var nextWater = GetNextWateringText(plant);
                 <div class="plant-card-modern">
                     <img src="@GetPhotoUrl(plant)" alt="@plant.Name" />
                     <div class="plant-card-body">
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="plant-meta">
                             <div>
-                                <p class="plant-name mb-0">@plant.Name</p>
-                                <small class="text-muted">@plant.Species</small>
+                                <p class="plant-name">@plant.Name</p>
+                                <small class="text-muted">@(string.IsNullOrWhiteSpace(plant.LocationArea) ? "Sin zona" : plant.LocationArea)</small>
                             </div>
                             <span class="plant-badge @(plant.IsIndoors ? "indoors" : "outdoors")">
                                 @(plant.IsIndoors ? "Interior" : "Exterior")
                             </span>
                         </div>
-                        <p class="next-water">@GetNextWateringText(plant)</p>
+                        <div class="plant-meta">
+                            <span class="status-chip @GetWateringStatusClass(nextWater)">
+                                @nextWater
+                            </span>
+                            <small class="text-muted">@plant.Species</small>
+                        </div>
                         <div class="plant-card-actions">
                             <NavLink href="@GetDetailsUrl(plant.Id)" class="ghost-btn">
                                 Ver ficha
@@ -99,19 +106,25 @@ else
         <div class="plant-carousel">
             @foreach (var plant in FilteredPlants)
             {
+                var nextWater = GetNextWateringText(plant);
                 <div class="carousel-card">
                     <img src="@GetPhotoUrl(plant)" alt="@plant.Name" />
                     <div class="carousel-body">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="plant-meta mb-2">
                             <div>
                                 <p class="plant-name mb-0">@plant.Name</p>
-                                <small class="text-muted">@plant.Species</small>
+                                <small class="text-muted">@(string.IsNullOrWhiteSpace(plant.LocationArea) ? "Sin zona" : plant.LocationArea)</small>
                             </div>
                             <span class="plant-badge @(plant.IsIndoors ? "indoors" : "outdoors")">
                                 @(plant.IsIndoors ? "Interior" : "Exterior")
                             </span>
                         </div>
-                        <p class="next-water">@GetNextWateringText(plant)</p>
+                        <div class="plant-meta mb-3">
+                            <span class="status-chip @GetWateringStatusClass(nextWater)">
+                                @nextWater
+                            </span>
+                            <small class="text-muted">@plant.Species</small>
+                        </div>
                         <div class="carousel-actions">
                             <NavLink href="@GetDetailsUrl(plant.Id)" class="btn btn-pill btn-primary">Abrir ficha</NavLink>
                         </div>
@@ -154,6 +167,9 @@ else
             isLoading = false;
         }
     }
+
+    private IEnumerable<HomeZone> FilteredZones =>
+        zoneOptions.Where(z => GetPlantCount(z.Name) > 0);
 
     private IEnumerable<Plant> FilteredPlants =>
         string.IsNullOrWhiteSpace(SelectedZone)
@@ -201,7 +217,51 @@ else
         return "/images/placeholder.svg";
     }
 
+    private static string GetWateringStatusClass(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return string.Empty;
+        }
+
+        if (message.Contains("Atrasado", StringComparison.OrdinalIgnoreCase))
+        {
+            return "warning";
+        }
+
+        if (message.Contains("Hoy", StringComparison.OrdinalIgnoreCase))
+        {
+            return "today";
+        }
+
+        return string.Empty;
+    }
+
     private static string GetEditUrl(int id) => $"/plants/edit/{id}";
     private static string GetDetailsUrl(int id) => $"/plants/{id}";
     private static string GetDeleteUrl(int id) => $"/plants/delete/{id}";
+
+    private static string GetZoneIcon(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "bi bi-app";
+        }
+
+        var normalized = name.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            var s when s.Contains("balc") => "bi bi-building-up",
+            var s when s.Contains("coci") => "bi bi-cup-straw",
+            var s when s.Contains("comedor") => "bi bi-egg-fried",
+            var s when s.Contains("sala") => "bi bi-sofa",
+            var s when s.Contains("dorm") => "bi bi-moon-stars",
+            var s when s.Contains("baño") || s.Contains("bano") => "bi bi-water",
+            var s when s.Contains("terraza") => "bi bi-brightness-high",
+            var s when s.Contains("patio") => "bi bi-tree",
+            var s when s.Contains("oficina") || s.Contains("estudio") => "bi bi-laptop",
+            _ => "bi bi-pin-map"
+        };
+    }
+
 }

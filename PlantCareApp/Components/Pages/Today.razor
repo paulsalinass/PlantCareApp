@@ -10,9 +10,6 @@
         <h1 class="mb-1 fw-semibold">Agenda de hoy</h1>
         <p class="text-muted mb-0">Gestiona el riego, abonado y otros cuidados pendientes.</p>
     </div>
-    <NavLink class="btn btn-primary" href="/plants">
-        Ver todas las plantas
-    </NavLink>
 </div>
 
 @if (!string.IsNullOrEmpty(statusMessage))
@@ -36,19 +33,19 @@ else if (reminders.Count == 0)
 }
 else
 {
-    <div class="row g-3 today-summary">
+    <div class="today-summary-row">
         @foreach (var card in summaryCards)
         {
-            <div class="col-12 col-md-4">
-                <div class="today-summary-card @card.CssClass">
-                    <div class="summary-icon">
-                        <i class="@card.Icon"></i>
+            <div class="today-summary-card @card.CssClass">
+                <div class="summary-icon">
+                    <i class="@card.Icon"></i>
+                </div>
+                <div>
+                    <div class="summary-head">
+                        <p class="summary-label mb-0">@card.Title</p>
+                        <div class="summary-count">@card.Count</div>
                     </div>
-                    <div>
-                        <p class="summary-label mb-1">@card.Title</p>
-                        <h3 class="summary-title mb-0">@card.Count</h3>
-                        <small class="text-muted">@card.Subtitle</small>
-                    </div>
+                    <small class="text-muted">@card.Subtitle</small>
                 </div>
             </div>
         }
@@ -71,21 +68,24 @@ else
                     <div class="col-12 col-lg-6">
                         <div class="today-task-card">
                             <div class="task-main">
-                                <div>
-                                    <p class="fw-semibold mb-0">@reminder.Plant.Name</p>
-                                    <small class="text-muted">@reminder.Plant.Species</small>
+                                <div class="task-lead">
+                                    <img src="@GetPlantPhoto(reminder.Plant)" alt="@reminder.Plant.Name" class="task-thumb" />
+                                    <div>
+                                        <p class="fw-semibold mb-0">@reminder.Plant.Name</p>
+                                        <small class="text-muted">@reminder.Plant.Species</small>
+                                    </div>
                                 </div>
                                 <span class="task-chip @GetDueClass(reminder)">@GetDueLabel(reminder)</span>
                             </div>
 
-                            <div class="task-meta">
+                            <div class="task-meta compact">
                                 <div>
-                                    <small class="text-muted">Ubicación</small>
-                                    <p class="mb-0 fw-medium">@DisplayLocation(reminder)</p>
+                                    <small class="text-muted text-uppercase">Tipo</small>
+                                    <p class="mb-0">@GetActionLabel(reminder.Type)</p>
                                 </div>
                                 <div>
-                                    <small class="text-muted">Tipo</small>
-                                    <p class="mb-0">@GetActionLabel(reminder.Type)</p>
+                                    <small class="text-muted text-uppercase">Pr&oacute;ximo</small>
+                                    <p class="mb-0">@FormatDueDate(reminder.DueDate)</p>
                                 </div>
                             </div>
 
@@ -106,15 +106,15 @@ else
 
                             <div class="d-flex gap-2">
                                 <button type="button"
-                                        class="btn btn-primary flex-fill"
+                                        class="btn btn-primary flex-fill btn-compact"
                                         disabled="@(workingReminderId == reminder.Id)"
                                         @onclick="() => CompleteReminder(reminder.Id)">
                                     @((workingReminderId == reminder.Id) ? "Guardando..." : "Listo")
                                 </button>
-                                <NavLink class="btn btn-outline-secondary btn-ghost" href="@($"/plants/edit/{reminder.PlantId}")">
+                                <NavLink class="btn btn-outline-secondary btn-compact" href="@($"/plants/edit/{reminder.PlantId}")">
                                     Editar
                                 </NavLink>
-                                <NavLink class="btn btn-outline-secondary btn-ghost" href="@($"/plants/{reminder.PlantId}?tab=history")">
+                                <NavLink class="btn btn-outline-secondary btn-compact" href="@($"/plants/{reminder.PlantId}?tab=history")">
                                     Historial
                                 </NavLink>
                             </div>
@@ -210,9 +210,9 @@ else
     private void BuildSummary()
     {
         summaryCards.Clear();
-        summaryCards.Add(CreateSummary(ReminderType.Watering, "Riegos pendientes", "bi bi-droplet", "watering"));
-        summaryCards.Add(CreateSummary(ReminderType.Fertilizing, "Fertilizaciones programadas", "bi bi-bag-heart", "fertilizing"));
-        summaryCards.Add(CreateSummary(ReminderType.Pruning, "Podas o inspección", "bi bi-flower3", "care"));
+    summaryCards.Add(CreateSummary(ReminderType.Watering, "Pendientes", "bi bi-droplet", "watering"));
+    summaryCards.Add(CreateSummary(ReminderType.Pruning, "Inspecciones", "bi bi-flower3", "care"));
+    summaryCards.Add(CreateSummary(ReminderType.Fertilizing, "Programadas", "bi bi-bag-heart", "fertilizing"));
     }
 
     private SummaryCard CreateSummary(ReminderType type, string subtitle, string icon, string css)
@@ -253,15 +253,6 @@ else
         _ => "bi bi-check2"
     };
 
-    private static string DisplayLocation(PlantReminder reminder)
-    {
-        if (!string.IsNullOrWhiteSpace(reminder.Plant.LocationName))
-        {
-            return reminder.Plant.LocationName;
-        }
-        return reminder.Plant.IsIndoors ? "Interior" : "Exterior";
-    }
-
     private static string GetDueLabel(PlantReminder reminder)
     {
         var diff = (reminder.DueDate.Date - DateTime.Today).Days;
@@ -277,6 +268,20 @@ else
         if (diff == 0) return "today";
         return "upcoming";
     }
+
+    private static string GetPlantPhoto(Plant plant)
+    {
+        if (!string.IsNullOrWhiteSpace(plant.MainPhotoPath))
+        {
+            return plant.MainPhotoPath.StartsWith("/", StringComparison.Ordinal)
+                ? plant.MainPhotoPath
+                : "/" + plant.MainPhotoPath;
+        }
+
+        return "/images/placeholder.svg";
+    }
+
+    private static string FormatDueDate(DateTime date) => date.ToLocalTime().ToString("dd MMM");
 
     private record SummaryCard(string Title, string Subtitle, string Icon, string CssClass, int Count);
 }

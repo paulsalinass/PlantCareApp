@@ -42,6 +42,12 @@ window.plantCare = (function () {
             requestAnimationFrame(() => {
                 element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
             });
+        },
+        scrollBy: (element, amount) => {
+            if (!element) {
+                return;
+            }
+            element.scrollBy({ left: amount, behavior: "smooth" });
         }
     };
 })();

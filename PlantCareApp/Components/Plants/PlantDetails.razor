@@ -7,12 +7,13 @@
 @inject RecommendationService RecommendationService
 @inject CareAutomationService AutomationService
 
-<div class="plant-detail-header mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+<div class="plant-detail-header">
     <div>
+        <p class="eyebrow text-muted mb-1">Ficha</p>
         <h1 class="mb-1 fw-semibold">Ficha de cuidado</h1>
         <p class="text-muted mb-0">Información y recomendaciones para tu planta.</p>
     </div>
-    <div class="d-flex gap-2">
+    <div class="detail-actions">
         <NavLink class="btn btn-outline-secondary" href="/plants">Volver</NavLink>
         <NavLink class="btn btn-primary" href="@($"/plants/edit/{Id}")">Editar</NavLink>
     </div>
@@ -28,16 +29,16 @@ else if (plant is null)
 }
 else
 {
-    <div class="row g-4">
+    <div class="row g-3 g-lg-4 align-items-start">
         <div class="col-12 col-lg-5">
             <div class="plant-detail-card hero h-100">
                 <img src="@GetPhoto(plant)" alt="@plant.Name" class="detail-hero-img" />
-                <div class="mt-3">
+                <div class="detail-meta">
                     <h2 class="h4 mb-1">@plant.Name</h2>
-                    <p class="text-muted">@plant.Species</p>
+                    <small class="text-muted">@plant.Species</small>
                 </div>
 
-                <div class="detail-stats mt-3">
+                <div class="detail-stats">
                     <div class="stat-chip">
                         <small>Zona</small>
                         <span>@(string.IsNullOrWhiteSpace(plant.LocationArea) ? "Sin dato" : plant.LocationArea)</span>
@@ -64,16 +65,16 @@ else
                         </p>
                     </div>
                     <div>
-                        <small class="text-muted">Horas de sol</small>
+                        <small class="text-muted text-uppercase">Horas de sol</small>
                         <p class="mb-0">@(plant.EstimatedSunHours?.ToString() ?? "N/A") h</p>
                     </div>
                     <div>
-                        <small class="text-muted">Notas</small>
+                        <small class="text-muted text-uppercase">Notas</small>
                         <p class="mb-0">@(string.IsNullOrWhiteSpace(plant.Notes) ? "Sin notas." : plant.Notes)</p>
                     </div>
                 </div>
 
-                <div class="climate-card mt-4">
+                <div class="climate-card compact mt-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <strong>Clima actual</strong>
                         @if (HasCoordinates)
@@ -95,16 +96,14 @@ else
                     }
                     else
                     {
-                        <div class="d-flex align-items-center gap-4">
-                            <div>
-                                <div class="climate-temp">@weather.Current.TemperatureC &deg;C</div>
-                                <small class="text-muted">@weather.Current.Conditions</small>
-                            </div>
-                            <div class="text-muted small">
-                                <div>Humedad: <strong>@weather.Current.Humidity %</strong></div>
-                                <div>Viento: <strong>@weather.Current.WindSpeedKph km/h</strong></div>
-                                <div>Actualizado: @weather.Current.RetrievedAt.ToLocalTime().ToShortTimeString()</div>
-                            </div>
+                        <div class="climate-brief">
+                            <div class="climate-temp">@weather.Current.TemperatureC &deg;C</div>
+                            <small class="text-muted">@weather.Current.Conditions</small>
+                        </div>
+                        <div class="text-muted small climate-meta">
+                            <div>Humedad <strong>@weather.Current.Humidity %</strong></div>
+                            <div>Viento <strong>@weather.Current.WindSpeedKph km/h</strong></div>
+                            <div>Actualizado @weather.Current.RetrievedAt.ToLocalTime().ToShortTimeString()</div>
                         </div>
                     }
                 </div>
